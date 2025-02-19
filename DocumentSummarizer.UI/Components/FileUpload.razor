@@ -1,0 +1,35 @@
+﻿@using DocumentSummarizer.UI.Services
+@inject ApiService ApiService
+@inject ApiService ApiService
+@inject ApiService ApiService
+
+<div class="card p-3">
+    <h5>📂 Upload a Document</h5>
+    <InputFile OnChange="OnFileSelected" class="form-control" />
+    <button @onclick="UploadFile" class="btn btn-primary mt-2" disabled="@isUploading || selectedFile == null">Upload</button>
+</div>
+
+@code {
+    private IBrowserFile selectedFile;
+    private bool isUploading;
+
+    [Parameter] public EventCallback<string> OnFileUploaded { get; set; }
+
+    private void OnFileSelected(InputFileChangeEventArgs e) // ✅ Correct event argument type
+    {
+        selectedFile = e.File; // ✅ Correct way to extract the file
+    }
+
+    private async Task UploadFile()
+    {
+        if (selectedFile == null) return;
+
+        isUploading = true;
+        StateHasChanged();
+
+        string documentId = await ApiService.UploadFileAsync(selectedFile);
+        await OnFileUploaded.InvokeAsync(documentId);
+
+        isUploading = false;
+    }
+}

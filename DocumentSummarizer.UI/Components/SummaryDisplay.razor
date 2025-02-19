@@ -1,0 +1,25 @@
+﻿@if (!string.IsNullOrEmpty(Summary))
+{
+    <div class="card p-3 mt-3">
+        <h5>Summary</h5>
+        <p>@Summary</p>
+    </div>
+}
+
+@if (PreviousSummaries.Count > 0)
+{
+    <div class="card p-3 mt-3">
+        <h5>Previous Summaries</h5>
+        <ul>
+            @foreach (var prevSummary in PreviousSummaries)
+            {
+                <li>@prevSummary</li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter] public string Summary { get; set; }
+    [Parameter] public List<string> PreviousSummaries { get; set; } = new();
+}

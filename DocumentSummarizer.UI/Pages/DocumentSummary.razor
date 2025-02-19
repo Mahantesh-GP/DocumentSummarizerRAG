@@ -1,0 +1,64 @@
+﻿@page "/document-summary"
+@using DocumentSummarizer.UI.Services
+@inject ApiService ApiService
+
+<h3>📄 AI-Powered Document Assistant</h3>
+
+<div class="chat-container">
+    <div class="chat-messages">
+        @foreach (var message in chatMessages)
+        {
+            <div class="chat-message @(message.IsUser ? "user-message" : "bot-message")">
+                <strong>@(message.IsUser ? "You" : "AI"):</strong> @message.Text
+            </div>
+        }
+    </div>
+
+    <!-- ✅ Use EventCallback Factory to Avoid Conversion Error -->
+    <FileUpload OnFileUploaded="HandleFileUploaded" />
+
+    <div class="chat-input">
+        <input type="text" @bind="userQuery" placeholder="Ask about your document..." class="form-control" />
+        <button @onclick="SendQuery" class="btn btn-primary mt-2" disabled="@isLoading || string.IsNullOrEmpty(userQuery)">Ask AI</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="spinner-border text-primary mt-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    }
+</div>
+
+@code {
+    private string userQuery;
+    private string documentId;
+    private bool isLoading;
+    private List<ChatMessage> chatMessages = new();
+
+    private async Task SendQuery()
+    {
+        if (string.IsNullOrEmpty(documentId) || string.IsNullOrEmpty(userQuery)) return;
+        isLoading = true;
+        chatMessages.Add(new ChatMessage { Text = userQuery, IsUser = true });
+        StateHasChanged();
+
+        var response = await ApiService.GetSummaryAsync(documentId, userQuery);
+        chatMessages.Add(new ChatMessage { Text = response, IsUser = false });
+
+        isLoading = false;
+        userQuery = string.Empty;
+    }
+
+    private void HandleFileUploaded(string uploadedDocumentId)
+    {
+        documentId = uploadedDocumentId;
+        chatMessages.Add(new ChatMessage { Text = $"📂 Document uploaded successfully! Document ID: {documentId}", IsUser = false });
+    }
+
+    private class ChatMessage
+    {
+        public string Text { get; set; }
+        public bool IsUser { get; set; }
+    }
+}

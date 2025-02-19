@@ -1,67 +1,79 @@
-using Azure;
-using Azure.Search.Documents;
+﻿using DocumentSummarizer.Infrastructure.Azure;
 using Azure.Storage.Blobs;
-using DocumentSummarizer.Infrastructure.Azure;
+using Azure.Search.Documents;
+using Azure;
+
+using DocumentSummarizer.API.Services;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel;
+using DocumentSummarizer.API.Configurations;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Load Configuration
 var configuration = builder.Configuration;
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
-
-// Azure Blob Storage
-var blobServiceClient = new BlobServiceClient(configuration["AZURE_STORAGE_CONNECTION_STRING"]);
+// Register Azure Blob Storage
+var blobServiceClient = new BlobServiceClient(configuration.GetConnectionString("AzureBlobStorage"));
 builder.Services.AddSingleton(blobServiceClient);
 builder.Services.AddSingleton<AzureBlobHelper>();
 
-// Azure Cognitive Search
-var azureSearchApiKey = configuration["AZURE_SEARCH_API_KEY"];
-if (string.IsNullOrEmpty(azureSearchApiKey))
-{
-    throw new InvalidOperationException("Azure Search API key is not configured.");
-}
-
+// Register Azure Cognitive Search
 var searchClient = new SearchClient(
-    new Uri($"https://{configuration["AZURE_SEARCH_SERVICE_NAME"]}.search.windows.net"),
-    "index-name",
-    new AzureKeyCredential(azureSearchApiKey)
+    new Uri($"https://{configuration["ConnectionStrings:AzureSearchService"]}.search.windows.net"),
+    "azureblob-index-ragdoc",
+    new AzureKeyCredential(configuration["ConnectionStrings:AzureSearchApiKey"])
 );
 builder.Services.AddSingleton(searchClient);
 builder.Services.AddSingleton<AzureSearchHelper>();
 
+// Register OpenAI API configuration
+builder.Services.Configure<AzureOpenAIOptions>(configuration.GetSection("AzureOpenAI"));
+
+// Register Semantic Kernel with OpenAI
+builder.Services.AddSingleton<Kernel>(sp =>
+{
+    var openAiOptions = sp.GetRequiredService<IConfiguration>().GetSection("AzureOpenAI").Get<AzureOpenAIOptions>();
+
+    var kernelBuilder = Kernel.CreateBuilder();
+    kernelBuilder.AddAzureOpenAIChatCompletion(
+        deploymentName: openAiOptions.DeploymentName,
+        endpoint: openAiOptions.Endpoint,
+        apiKey: openAiOptions.ApiKey
+    );
+
+    return kernelBuilder.Build();
+});
+
+builder.Services.AddHttpClient();
+// Register API Services
+builder.Services.AddScoped<AzureStorageService>();
+builder.Services.AddScoped<AzureSearchService>();
+builder.Services.AddScoped<SummarizationService>();
+
+// Register Controllers
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+var allowedOrigins = "AllowBlazorClient";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: allowedOrigins,
+        policy =>
+        {
+            policy.WithOrigins("https://localhost:7167") // ✅ Change this to match Blazor UI URL
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
+});
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-        "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-    };
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.UseAuthorization();
+app.MapControllers();
+app.UseCors(allowedOrigins);
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
