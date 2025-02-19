@@ -1,0 +1,60 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36" version="26.0.14">
+  <diagram name="Page-1" id="r-aizupqTXoKXHTq9gff">
+    <mxGraphModel dx="1246" dy="426" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="JdcxDVg7dWCf6L99a6bk-1" target="JdcxDVg7dWCf6L99a6bk-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-1" value="&lt;div&gt;User Interface (UI)&lt;/div&gt;&lt;div&gt;Blazor WebAssembly (SPA)&amp;nbsp;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;-&amp;nbsp; Upload Document&amp;nbsp;&lt;/div&gt;&lt;div&gt;&amp;nbsp;- Query for Summary&lt;/div&gt;&lt;div&gt;- Display Summarization&amp;nbsp;&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="60" y="10" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="JdcxDVg7dWCf6L99a6bk-2" target="JdcxDVg7dWCf6L99a6bk-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-2" value="&amp;nbsp;Controller&lt;br&gt;(.NET Core API - REST API)&lt;div&gt;&lt;br&gt;-&amp;nbsp; Handles user requests&lt;br&gt;-&amp;nbsp; Routes to correct service&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="430" y="10" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="JdcxDVg7dWCf6L99a6bk-3" target="JdcxDVg7dWCf6L99a6bk-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-3" value="Azure Blob Storage&lt;div&gt;(Storage for Uploaded Docs)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;-&amp;nbsp; Store documents&lt;/div&gt;&lt;div&gt;-&amp;nbsp; Retrieve document content&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="320" y="360" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="JdcxDVg7dWCf6L99a6bk-4" target="JdcxDVg7dWCf6L99a6bk-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-4" value="Azure Cognitive Search&lt;div&gt;(Vector Indexing &amp;amp; Search)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- Index documents&lt;/div&gt;&lt;div&gt;- Retrieve relevant text&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="550" y="360" width="150" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-5" value="Document Processing&lt;div&gt;(Summarization &amp;amp; Retrieval)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- Retrieve document content&lt;/div&gt;&lt;div&gt;- Call OpenAI for summary&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="180" y="560" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="JdcxDVg7dWCf6L99a6bk-6" target="JdcxDVg7dWCf6L99a6bk-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-6" value="Semantic Kernel (Plugins)&lt;div&gt;(Function Calling &amp;amp; Prompt)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- Process user queries&lt;/div&gt;&lt;div&gt;- Generate better responses&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="650" y="560" width="160" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="JdcxDVg7dWCf6L99a6bk-7" target="JdcxDVg7dWCf6L99a6bk-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-7" value="Azure OpenAI Service (GPT)&lt;div&gt;Summarization Model (RAG)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;- Generate document summary&lt;/div&gt;&lt;div&gt;- Answer user queries&lt;/div&gt;" style="whiteSpace=wrap;html=1;aspect=fixed;" vertex="1" parent="1">
+          <mxGeometry x="440" y="770" width="170" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-8" value="Response to User&lt;div&gt;(Summarized Text)&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="1010" width="370" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="JdcxDVg7dWCf6L99a6bk-5">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="504" y="770" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="JdcxDVg7dWCf6L99a6bk-32" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.364;entryY=-0.022;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="JdcxDVg7dWCf6L99a6bk-2" target="JdcxDVg7dWCf6L99a6bk-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
