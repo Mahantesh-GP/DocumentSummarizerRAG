@@ -1,0 +1,53 @@
+﻿
+Untrusted Deserialization Detect deserialization of untrusted data without validation or safe mechanisms (e.g., BinaryFormatter in .NET).
+// Insecure deserialization using BinaryFormatter
+BinaryFormatter formatter = new BinaryFormatter();
+MemoryStream ms = new MemoryStream(Convert.FromBase64String(userControlledInput));
+object deserialized = formatter.Deserialize(ms); // Risk: RCE if userControlledInput is malicious
+
+
+Missing Integrity Checks on Software Updates
+Rule: Ensure downloaded updates/plugins are signed/validated with cryptographic hashes or signatures.  Detects insecure dependencies, like downloading files over HTTP or using outdated libraries.
+// Downloading code without integrity checks
+WebClient client = new WebClient();
+byte[] update = client.DownloadData("http://untrusted-site.com/update.exe"); 
+File.WriteAllBytes("update.exe", update); // Risk: Tampered code execution
+
+Use of Weak Cryptographic Hashing Algorithms
+Rule: Reject deprecated hashing algorithms (e.g., MD5, SHA-1) for integrity checks.
+// Using SHA-1 for file integrity check
+using (SHA1 sha = SHA1.Create())
+{
+    byte[] hash = sha.ComputeHash(fileData); // Risk: SHA-1 is collision-prone
+}
+
+Rule 4: Insecure Data Validation for Critical Operations
+Rule: Validate integrity of data used in security decisions (e.g., JWT tokens, API requests).
+// Processing unsigned/untampered JWT tokens
+var token = JwtBuilder()
+    .Decode<JwtHeader>(unvalidatedJwtString); // Risk: Attacker can forge tokens
+
+ Hardcoded Secrets or Keys
+Rule: Detect hardcoded secrets (e.g., API keys, encryption keys) in source code.
+// Hardcoded encryption key
+string encryptionKey = "mySuperSecretKey123"; // Risk: Key exposed in source code
+
+Missing Code Signing for Executables
+Rule: Ensure all executables/scripts are signed with a trusted certificate.
+// Pseudocode: Check if DLL/EXE is unsigned
+if (!AuthenticodeTools.IsSigned("plugin.dll"))
+{
+    throw new SecurityException("Unsigned code execution blocked.");
+}
+
+Improper Use of DangerouslySetInnerHTML (Frontend)
+Rule: Detect raw HTML injection without sanitization (applies to web frameworks).
+// React: Unsanitized HTML rendering
+<div dangerouslySetInnerHTML={{ __html: userSuppliedContent }} /> // Risk: XSS
+
+Reliance on Client-Side Validation Only
+Rule: Detect security logic enforced solely on the client side (e.g., client-side price checks).
+// Client-side price validation (bypassable)
+if (cart.totalPrice > 0) {
+    submitOrder(); // Risk: Attacker can tamper with totalPrice
+}
