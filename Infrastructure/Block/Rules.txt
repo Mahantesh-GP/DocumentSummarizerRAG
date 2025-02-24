@@ -1,53 +1,89 @@
-﻿
-Untrusted Deserialization Detect deserialization of untrusted data without validation or safe mechanisms (e.g., BinaryFormatter in .NET).
-// Insecure deserialization using BinaryFormatter
-BinaryFormatter formatter = new BinaryFormatter();
-MemoryStream ms = new MemoryStream(Convert.FromBase64String(userControlledInput));
-object deserialized = formatter.Deserialize(ms); // Risk: RCE if userControlledInput is malicious
+﻿ Insecure Communication by Design
+Rule: Enforce HTTPS and reject HTTP in production.
+// UNSAFE: Hardcoded HTTP endpoint  
+var serviceUrl = "http://api.example.com/data";  
+var client = new HttpClient();  
+var response = client.GetAsync(serviceUrl).Result;  
 
+ Lack of Input Validation Schema
+Rule: Validate input structurally (e.g., data type, format) at the API/contract level, not just in code.
 
-Missing Integrity Checks on Software Updates
-Rule: Ensure downloaded updates/plugins are signed/validated with cryptographic hashes or signatures.  Detects insecure dependencies, like downloading files over HTTP or using outdated libraries.
-// Downloading code without integrity checks
-WebClient client = new WebClient();
-byte[] update = client.DownloadData("http://untrusted-site.com/update.exe"); 
-File.WriteAllBytes("update.exe", update); // Risk: Tampered code execution
+Insecure Data Storage Design
+Detect plaintext storage of sensitive data (e.g., passwords, credit cards).
 
-Use of Weak Cryptographic Hashing Algorithms
-Rule: Reject deprecated hashing algorithms (e.g., MD5, SHA-1) for integrity checks.
-// Using SHA-1 for file integrity check
-using (SHA1 sha = SHA1.Create())
+No Rate Limiting or Anti-Automation
+Detect endpoints vulnerable to brute-force attacks (e.g., login, OTP verification).
+Example (Bad Practice):
+
+Hardcoded Secrets
+ Detect secrets (API keys, passwords) embedded in code/config files.
+
+  Insecure Communication by Design
+Rule: Enforce HTTPS and reject HTTP in production.
+// UNSAFE: Hardcoded HTTP endpoint  
+var serviceUrl = "http://api.example.com/data";  
+var client = new HttpClient();  
+var response = client.GetAsync(serviceUrl).Result;  
+
+Insecure Default Configurations
+
+Lack of Audit Logging
+Rule: Critical operations (e.g., logins, financial transactions) must log security-relevant events.
+
+Detect direct access to resources without ownership checks (e.g., /api/user/{userId}).
+// UNSAFE: No check if the user owns the resource  
+[HttpGet("/orders/{orderId}")]  
+public Order GetOrder(int orderId)  
+{  
+    return dbContext.Orders.Find(orderId); // Attacker can access any order
+}  
+
+State-changing requests (e.g., POST, PUT) must validate anti-CSRF tokens.
+
+Validate file types, size, and scan for malware before processing.
+// UNSAFE: Accepts any file type  
+var file = Request.Files[0];  
+file.SaveAs("uploads/" + file.FileName); // Risk: Malware upload
+
+Sessions must expire after inactivity or a fixed duration
+Systems must not ship with insecure defaults (e.g., default admin credentials, debug mode enabled in production).
+
 {
-    byte[] hash = sha.ComputeHash(fileData); // Risk: SHA-1 is collision-prone
-}
-
-Rule 4: Insecure Data Validation for Critical Operations
-Rule: Validate integrity of data used in security decisions (e.g., JWT tokens, API requests).
-// Processing unsigned/untampered JWT tokens
-var token = JwtBuilder()
-    .Decode<JwtHeader>(unvalidatedJwtString); // Risk: Attacker can forge tokens
-
- Hardcoded Secrets or Keys
-Rule: Detect hardcoded secrets (e.g., API keys, encryption keys) in source code.
-// Hardcoded encryption key
-string encryptionKey = "mySuperSecretKey123"; // Risk: Key exposed in source code
-
-Missing Code Signing for Executables
-Rule: Ensure all executables/scripts are signed with a trusted certificate.
-// Pseudocode: Check if DLL/EXE is unsigned
-if (!AuthenticodeTools.IsSigned("plugin.dll"))
-{
-    throw new SecurityException("Unsigned code execution blocked.");
-}
-
-Improper Use of DangerouslySetInnerHTML (Frontend)
-Rule: Detect raw HTML injection without sanitization (applies to web frameworks).
-// React: Unsanitized HTML rendering
-<div dangerouslySetInnerHTML={{ __html: userSuppliedContent }} /> // Risk: XSS
-
-Reliance on Client-Side Validation Only
-Rule: Detect security logic enforced solely on the client side (e.g., client-side price checks).
-// Client-side price validation (bypassable)
-if (cart.totalPrice > 0) {
-    submitOrder(); // Risk: Attacker can tamper with totalPrice
+  "id": "INSECURE-DESIGN-001",
+  "name": "Detect Insecure Design Patterns",
+  "severity": "high",
+  "category": "Insecure Design",
+  "description": "This rule checks for missing security controls, hardcoded secrets, excessive privileges, and unvalidated inputs leading to insecure design.",
+  "patterns": [
+    {
+      "id": "MISSING-AUTHORIZATION",
+      "description": "Checks for APIs/routes missing authentication or authorization checks.",
+      "regex": "(?i)\\[Http(Get|Post|Put|Delete)\\][\\s\\S]*?(public|private)\\s+(async\\s+)?(Task|ActionResult)",
+      "recommendation": "Ensure proper authentication and role-based access control (RBAC) is enforced."
+    },
+    {
+      "id": "HARDCODED-SECRETS",
+      "description": "Detects hardcoded secrets in code.",
+      "regex": "(?i)(password|apikey|secret|token)\\s*=\\s*[\"'][^\"']+[\"']",
+      "recommendation": "Move sensitive data to environment variables or a secure vault."
+    },
+    {
+      "id": "EXCESSIVE-PERMISSIONS",
+      "description": "Identifies database connections using root/admin credentials.",
+      "regex": "(?i)(User Id|Username)\\s*=\\s*(root|admin);",
+      "recommendation": "Use least privilege principles by creating dedicated, minimal-privilege users."
+    },
+    {
+      "id": "UNVALIDATED-INPUTS",
+      "description": "Detects user input usage without validation in critical functions.",
+      "regex": "(?i)(request\\.|querystring\\.|form\\.|params\\[)[^\\)]",
+      "recommendation": "Always validate and sanitize user inputs before processing."
+    },
+    {
+      "id": "UNENCRYPTED-SENSITIVE-DATA",
+      "description": "Detects storage of sensitive data in plaintext.",
+      "regex": "(?i)(ssn|creditcard|cvv|password)\\s*=\\s*[\"'][^\"']+[\"']",
+      "recommendation": "Use encryption mechanisms like AES for storing sensitive data."
+    }
+  ]
 }
