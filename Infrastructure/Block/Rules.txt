@@ -1,35 +1,37 @@
-﻿@inject HttpClient Http
+﻿using System.Reflection.PortableExecutable;
+using System.Text.RegularExpressions;
+using System.Text;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.parser;
 
-<h3>File Upload</h3>
-<InputFile OnChange="HandleFileSelected" multiple="false" />
-<p>@statusMessage</p>
-
-@code {
-    private string statusMessage = "Select a file to upload.";
-
-    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+namespace DocRagSummary.API.Services
+{
+    public class DocumentService
     {
-        var file = e.File;
-        if (file == null)
-        {
-            statusMessage = "No file selected.";
-            return;
-        }
 
-        var content = new MultipartFormDataContent();
-        var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 10); // 10MB limit
-        var fileContent = new StreamContent(stream);
-        content.Add(fileContent, "file", file.Name);
+        public async Task<string> UploadFileAsync(IFormFile file)
+        {           
 
-        var response = await Http.PostAsync("https://localhost:5001/api/upload", content);
-        
-        if (response.IsSuccessStatusCode)
-        {
-            statusMessage = "File uploaded successfully!";
+            string extractedText = await ExtractTextFromFile(file);
+
+            return extractedText;
         }
-        else
+        private async Task<string> ExtractTextFromFile(IFormFile file)
         {
-            statusMessage = $"Upload failed: {response.ReasonPhrase}";
+            string extractedText;
+            using (var stream = file.OpenReadStream())
+            {
+
+                using var reader = new PdfReader(stream);
+                StringBuilder text = new StringBuilder();
+                for (int i = 1; i <= reader.NumberOfPages; i++)
+                {
+                    text.Append(PdfTextExtractor.GetTextFromPage(reader, i));
+                }
+                extractedText = text.ToString();
+            }
+
+            return extractedText;
         }
     }
 }
