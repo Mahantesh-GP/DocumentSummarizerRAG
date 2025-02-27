@@ -1,31 +1,35 @@
-﻿ Detect hardcoded default passwords, admin accounts, or insecure settings (e.g., debug mode enabled in production).
- suggest to Use environment variables or secrets management tools (e.g., Azure Key Vault):
- // UNSAFE: Default credentials in code  
-var adminUser = new User { 
-    Username = "admin", 
-    Password = "admin@123" // Default password
-};  
+﻿@inject HttpClient Http
 
- Ensure security headers are set (e.g., Content-Security-Policy, X-Content-Type-Options).
-Example (Bad Practice):
+<h3>File Upload</h3>
+<InputFile OnChange="HandleFileSelected" multiple="false" />
+<p>@statusMessage</p>
 
-Detect unused services, open ports, or debug features (e.g., Swagger UI in production).
-<!-- UNSAFE: Debug mode enabled in production web.config -->  
-<system.web>  
-    <compilation debug="true" />  
-</system.web>  
+@code {
+    private string statusMessage = "Select a file to upload.";
 
- Prevent stack traces or sensitive data leakage in error responses
- // UNSAFE: Detailed errors enabled in production  
-public void Configure(IApplicationBuilder app, IWebHostEnvironment env)  
-{  
-    if (env.IsDevelopment())  
-    {  
-        app.UseDeveloperExceptionPage(); // OK in dev  
-    }  
-    // MISSING: No custom error handling for production  
-}  
- \
- Detect overly permissive Cross-Origin Resource Sharing (CORS) configurations.
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null)
+        {
+            statusMessage = "No file selected.";
+            return;
+        }
 
- Ensure sensitive files (e.g., logs, configs) are not world-readable.
+        var content = new MultipartFormDataContent();
+        var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 10); // 10MB limit
+        var fileContent = new StreamContent(stream);
+        content.Add(fileContent, "file", file.Name);
+
+        var response = await Http.PostAsync("https://localhost:5001/api/upload", content);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            statusMessage = "File uploaded successfully!";
+        }
+        else
+        {
+            statusMessage = $"Upload failed: {response.ReasonPhrase}";
+        }
+    }
+}
