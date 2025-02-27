@@ -1,37 +1,50 @@
-﻿using System.Reflection.PortableExecutable;
-using System.Text.RegularExpressions;
-using System.Text;
-using iTextSharp.text.pdf;
-using iTextSharp.text.pdf.parser;
+﻿@inject HttpClient Http
 
-namespace DocRagSummary.API.Services
-{
-    public class DocumentService
+<h3>File Upload Form</h3>
+
+<form @onsubmit="UploadFile">
+    <InputFile OnChange="HandleFileSelected" multiple="false" />
+    <button type="submit" disabled="@isUploading">Upload</button>
+</form>
+
+<p>@statusMessage</p>
+
+@code {
+    private IBrowserFile? selectedFile;
+    private string statusMessage = "Select a file and click upload.";
+    private bool isUploading = false;
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
     {
+        selectedFile = e.File;
+        statusMessage = $"Selected file: {selectedFile?.Name}";
+    }
 
-        public async Task<string> UploadFileAsync(IFormFile file)
-        {           
-
-            string extractedText = await ExtractTextFromFile(file);
-
-            return extractedText;
-        }
-        private async Task<string> ExtractTextFromFile(IFormFile file)
+    private async Task UploadFile(FormSubmitEventArgs e)
+    {
+        if (selectedFile == null)
         {
-            string extractedText;
-            using (var stream = file.OpenReadStream())
-            {
-
-                using var reader = new PdfReader(stream);
-                StringBuilder text = new StringBuilder();
-                for (int i = 1; i <= reader.NumberOfPages; i++)
-                {
-                    text.Append(PdfTextExtractor.GetTextFromPage(reader, i));
-                }
-                extractedText = text.ToString();
-            }
-
-            return extractedText;
+            statusMessage = "Please select a file before uploading.";
+            return;
         }
+
+        isUploading = true;
+        var content = new MultipartFormDataContent();
+        var stream = selectedFile.OpenReadStream(maxAllowedSize: 1024 * 1024 * 10); // 10MB limit
+        var fileContent = new StreamContent(stream);
+        content.Add(fileContent, "file", selectedFile.Name);
+
+        var response = await Http.PostAsync("https://localhost:5001/api/upload", content);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            statusMessage = "File uploaded successfully!";
+        }
+        else
+        {
+            statusMessage = $"Upload failed: {response.ReasonPhrase}";
+        }
+
+        isUploading = false;
     }
 }
