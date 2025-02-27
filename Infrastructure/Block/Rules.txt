@@ -16,6 +16,15 @@ Detect unused services, open ports, or debug features (e.g., Swagger UI in produ
 </system.web>  
 
  Prevent stack traces or sensitive data leakage in error responses
+ // UNSAFE: Detailed errors enabled in production  
+public void Configure(IApplicationBuilder app, IWebHostEnvironment env)  
+{  
+    if (env.IsDevelopment())  
+    {  
+        app.UseDeveloperExceptionPage(); // OK in dev  
+    }  
+    // MISSING: No custom error handling for production  
+}  
  \
  Detect overly permissive Cross-Origin Resource Sharing (CORS) configurations.
 
