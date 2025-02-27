@@ -1,89 +1,22 @@
-﻿ Insecure Communication by Design
-Rule: Enforce HTTPS and reject HTTP in production.
-// UNSAFE: Hardcoded HTTP endpoint  
-var serviceUrl = "http://api.example.com/data";  
-var client = new HttpClient();  
-var response = client.GetAsync(serviceUrl).Result;  
+﻿ Detect hardcoded default passwords, admin accounts, or insecure settings (e.g., debug mode enabled in production).
+ suggest to Use environment variables or secrets management tools (e.g., Azure Key Vault):
+ // UNSAFE: Default credentials in code  
+var adminUser = new User { 
+    Username = "admin", 
+    Password = "admin@123" // Default password
+};  
 
- Lack of Input Validation Schema
-Rule: Validate input structurally (e.g., data type, format) at the API/contract level, not just in code.
-
-Insecure Data Storage Design
-Detect plaintext storage of sensitive data (e.g., passwords, credit cards).
-
-No Rate Limiting or Anti-Automation
-Detect endpoints vulnerable to brute-force attacks (e.g., login, OTP verification).
+ Ensure security headers are set (e.g., Content-Security-Policy, X-Content-Type-Options).
 Example (Bad Practice):
 
-Hardcoded Secrets
- Detect secrets (API keys, passwords) embedded in code/config files.
+Detect unused services, open ports, or debug features (e.g., Swagger UI in production).
+<!-- UNSAFE: Debug mode enabled in production web.config -->  
+<system.web>  
+    <compilation debug="true" />  
+</system.web>  
 
-  Insecure Communication by Design
-Rule: Enforce HTTPS and reject HTTP in production.
-// UNSAFE: Hardcoded HTTP endpoint  
-var serviceUrl = "http://api.example.com/data";  
-var client = new HttpClient();  
-var response = client.GetAsync(serviceUrl).Result;  
+ Prevent stack traces or sensitive data leakage in error responses
+ \
+ Detect overly permissive Cross-Origin Resource Sharing (CORS) configurations.
 
-Insecure Default Configurations
-
-Lack of Audit Logging
-Rule: Critical operations (e.g., logins, financial transactions) must log security-relevant events.
-
-Detect direct access to resources without ownership checks (e.g., /api/user/{userId}).
-// UNSAFE: No check if the user owns the resource  
-[HttpGet("/orders/{orderId}")]  
-public Order GetOrder(int orderId)  
-{  
-    return dbContext.Orders.Find(orderId); // Attacker can access any order
-}  
-
-State-changing requests (e.g., POST, PUT) must validate anti-CSRF tokens.
-
-Validate file types, size, and scan for malware before processing.
-// UNSAFE: Accepts any file type  
-var file = Request.Files[0];  
-file.SaveAs("uploads/" + file.FileName); // Risk: Malware upload
-
-Sessions must expire after inactivity or a fixed duration
-Systems must not ship with insecure defaults (e.g., default admin credentials, debug mode enabled in production).
-
-{
-  "id": "INSECURE-DESIGN-001",
-  "name": "Detect Insecure Design Patterns",
-  "severity": "high",
-  "category": "Insecure Design",
-  "description": "This rule checks for missing security controls, hardcoded secrets, excessive privileges, and unvalidated inputs leading to insecure design.",
-  "patterns": [
-    {
-      "id": "MISSING-AUTHORIZATION",
-      "description": "Checks for APIs/routes missing authentication or authorization checks.",
-      "regex": "(?i)\\[Http(Get|Post|Put|Delete)\\][\\s\\S]*?(public|private)\\s+(async\\s+)?(Task|ActionResult)",
-      "recommendation": "Ensure proper authentication and role-based access control (RBAC) is enforced."
-    },
-    {
-      "id": "HARDCODED-SECRETS",
-      "description": "Detects hardcoded secrets in code.",
-      "regex": "(?i)(password|apikey|secret|token)\\s*=\\s*[\"'][^\"']+[\"']",
-      "recommendation": "Move sensitive data to environment variables or a secure vault."
-    },
-    {
-      "id": "EXCESSIVE-PERMISSIONS",
-      "description": "Identifies database connections using root/admin credentials.",
-      "regex": "(?i)(User Id|Username)\\s*=\\s*(root|admin);",
-      "recommendation": "Use least privilege principles by creating dedicated, minimal-privilege users."
-    },
-    {
-      "id": "UNVALIDATED-INPUTS",
-      "description": "Detects user input usage without validation in critical functions.",
-      "regex": "(?i)(request\\.|querystring\\.|form\\.|params\\[)[^\\)]",
-      "recommendation": "Always validate and sanitize user inputs before processing."
-    },
-    {
-      "id": "UNENCRYPTED-SENSITIVE-DATA",
-      "description": "Detects storage of sensitive data in plaintext.",
-      "regex": "(?i)(ssn|creditcard|cvv|password)\\s*=\\s*[\"'][^\"']+[\"']",
-      "recommendation": "Use encryption mechanisms like AES for storing sensitive data."
-    }
-  ]
-}
+ Ensure sensitive files (e.g., logs, configs) are not world-readable.
