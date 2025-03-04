@@ -1,50 +1,54 @@
-﻿@inject HttpClient Http
+Following our recent meeting, I have outlined the key discussion points regarding the POC implementation. Please find the details below:
 
-<h3>File Upload Form</h3>
+1. GPT Naming and Configuration:
 
-<form @onsubmit="UploadFile">
-    <InputFile OnChange="HandleFileSelected" multiple="false" />
-    <button type="submit" disabled="@isUploading">Upload</button>
-</form>
+Each GPT should have a unique name per user.
 
-<p>@statusMessage</p>
+A Configure and Preview screen should be included before creating or saving a GPT.
 
-@code {
-    private IBrowserFile? selectedFile;
-    private string statusMessage = "Select a file and click upload.";
-    private bool isUploading = false;
+The Preview chat history/conversations should not be stored.
 
-    private void HandleFileSelected(InputFileChangeEventArgs e)
-    {
-        selectedFile = e.File;
-        statusMessage = $"Selected file: {selectedFile?.Name}";
-    }
 
-    private async Task UploadFile(FormSubmitEventArgs e)
-    {
-        if (selectedFile == null)
-        {
-            statusMessage = "Please select a file before uploading.";
-            return;
-        }
 
-        isUploading = true;
-        var content = new MultipartFormDataContent();
-        var stream = selectedFile.OpenReadStream(maxAllowedSize: 1024 * 1024 * 10); // 10MB limit
-        var fileContent = new StreamContent(stream);
-        content.Add(fileContent, "file", selectedFile.Name);
+2. User Interface and Experience Enhancements:
 
-        var response = await Http.PostAsync("https://localhost:5001/api/upload", content);
-        
-        if (response.IsSuccessStatusCode)
-        {
-            statusMessage = "File uploaded successfully!";
-        }
-        else
-        {
-            statusMessage = $"Upload failed: {response.ReasonPhrase}";
-        }
+The "Conversation Starter" section should be renamed to Examples.
 
-        isUploading = false;
-    }
-}
+When editing a GPT, the GPT name should remain non-editable.
+
+A checkbox should be added for enabling/disabling web search.
+
+
+
+3. Database Design Adjustments:
+
+The capability field should be removed from the database design.
+
+The database should include only a single GPTs table.
+
+A checkbox should be added to mark GPTs as private or public.
+
+
+
+4. Explore & Collaboration Features:
+
+Clicking the Explore button should open a popup allowing users to create, search, and select GPTs.
+
+A delete option should be provided in the Explore popup for GPT management.
+
+Users should have the ability to subscribe/unsubscribe from shared GPTs.
+
+The Explore popup should categorize GPTs into:
+
+Search GPTs
+
+Shared GPTs
+
+Private GPTs
+
+
+
+
+5. POC Priorities:
+
+In the initial phase of the POC, we are prioritizing the Show, Preview, Search, and Collaboration functionalities.
