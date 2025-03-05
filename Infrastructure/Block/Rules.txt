@@ -1,12 +1,12 @@
-ï»¿ Ragas is a framework for evaluating RAG pipelines. It provides metrics to assess the effectiveness of both the retrieval and generation components. 
+ Ragas is a framework for evaluating RAG pipelines. It provides metrics to assess the effectiveness of both the retrieval and generation components. 
 Metrics might include relevance, faithfulness, answer correctness, etc.
 
 Evaluation is important to check if the system is accurate and reliable. Ragas automates this evaluation with predefined metrics.
-Ragas helps users understand where their RAG system might be failingâ€”whether in retrieving the right documents or generating good answers.
+Ragas helps users understand where their RAG system might be failing—whether in retrieving the right documents or generating good answers.
 
 ike faithfulness checks if the generated answer is based on the retrieved documents.
 
-Ragas is a tool to evaluate RAG systems (Retrieval-Augmented Generation), it tells you whatâ€™s wrong so you can fix it! 
+Ragas is a tool to evaluate RAG systems (Retrieval-Augmented Generation), it tells you what’s wrong so you can fix it! 
 Ragas helps you measure how good your RAG system is. For example, if you build a chatbot that answers questions by searching documents,
  Ragas checks if the answers are accurate, relevant, and trustworthy.
 
@@ -44,23 +44,23 @@ Faithfulness:
 
 Checks if the answer is based on the provided context.
 
-Example: If your AI says "Paris is the capital," and the context says "France's capital is Paris," faithfulness is high. If the context doesnâ€™t mention Paris, itâ€™s low (the AI "hallucinated").
+Example: If your AI says "Paris is the capital," and the context says "France's capital is Paris," faithfulness is high. If the context doesn’t mention Paris, it’s low (the AI "hallucinated").
 
 Answer Relevance:
 
 Is the answer detailed and directly related to the question?
 
-Example: Answering "Paris" to "What is Franceâ€™s capital?" is more relevant than a vague "Itâ€™s a city in Europe."
+Example: Answering "Paris" to "What is France’s capital?" is more relevant than a vague "It’s a city in Europe."
 
 Context Relevance:
 
 Are the retrieved documents useful for answering the question?
 
-Example: If you ask about Franceâ€™s capital, but the retrieved document talks about Italian food, this score drops.
+Example: If you ask about France’s capital, but the retrieved document talks about Italian food, this score drops.
 
 How to Improve Your RAG System
 If faithfulness is low: Your AI is making up answers. Fix this by improving the retrieval step (fetch better documents).
 
-If answer relevance is low: Your AIâ€™s answers are vague. Train it to generate clearer responses.
+If answer relevance is low: Your AI’s answers are vague. Train it to generate clearer responses.
 
-Ragasâ€™ scores act like a "report card" to identify weaknesses.
+Ragas’ scores act like a "report card" to identify weaknesses.
