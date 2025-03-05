@@ -1,66 +1,18 @@
- Ragas is a framework for evaluating RAG pipelines. It provides metrics to assess the effectiveness of both the retrieval and generation components. 
-Metrics might include relevance, faithfulness, answer correctness, etc.
+Detect dependencies listed in vulnerability databases (e.g., CVE, NVD, OWASP Dependency-Check).
 
-Evaluation is important to check if the system is accurate and reliable. Ragas automates this evaluation with predefined metrics.
-Ragas helps users understand where their RAG system might be failing—whether in retrieving the right documents or generating good answers.
+Flag dependencies not updated to the latest stable version.
 
-ike faithfulness checks if the generated answer is based on the retrieved documents.
+<!-- UNSAFE: Using an outdated Entity Framework Core -->  
+<PackageReference Include="Microsoft.EntityFrameworkCore" Version="3.1.0" />  
 
-Ragas is a tool to evaluate RAG systems (Retrieval-Augmented Generation), it tells you what’s wrong so you can fix it! 
-Ragas helps you measure how good your RAG system is. For example, if you build a chatbot that answers questions by searching documents,
- Ragas checks if the answers are accurate, relevant, and trustworthy.
+ Ensure CI/CD pipelines include dependency scanning.
 
-It calculates scores like:
+ Detect usage of deprecated methods/classes (e.g., WebClient in .NET).
 
-Relevance: Does the retrieved document match the question?
+ Ensure an SBOM is generated to track all components (e.g., using CycloneDX).
 
-Faithfulness: Is the generated answer based on the retrieved documents (not made-up)?
+ Detect dependencies with no recent updates or community support.
 
-Answer Correctness: Is the answer factually accurate?
+ Flag insecure defaults (e.g., MongoDB without authentication, Redis exposed publicly).
 
-Step 2: Prepare Data
-You need:
-
-questions: List of questions (e.g., ["What is the capital of France?"])
-
-answers: List of AI-generated answers (e.g., ["Paris"])
-
-contexts: Lists of documents/contexts used to generate answers (e.g., [["France's capital is Paris."]])
-
-ground_truths: Correct reference answers (optional but helpful).
-dataset = {
-    "question": ["What is the capital of France?"],
-    "answer": ["Paris"],
-    "contexts": [["France's capital is Paris."]],
-    "ground_truths": ["Paris"]
-}
-
-score = evaluate(dataset, metrics=[faithfulness, answer_relevance])
-print(score)
-Ragas will output scores (e.g., faithfulness: 0.95) telling you how well your system performed.
-
-4. Key Metrics Explained (Beginner-Friendly)
-Faithfulness:
-
-Checks if the answer is based on the provided context.
-
-Example: If your AI says "Paris is the capital," and the context says "France's capital is Paris," faithfulness is high. If the context doesn’t mention Paris, it’s low (the AI "hallucinated").
-
-Answer Relevance:
-
-Is the answer detailed and directly related to the question?
-
-Example: Answering "Paris" to "What is France’s capital?" is more relevant than a vague "It’s a city in Europe."
-
-Context Relevance:
-
-Are the retrieved documents useful for answering the question?
-
-Example: If you ask about France’s capital, but the retrieved document talks about Italian food, this score drops.
-
-How to Improve Your RAG System
-If faithfulness is low: Your AI is making up answers. Fix this by improving the retrieval step (fetch better documents).
-
-If answer relevance is low: Your AI’s answers are vague. Train it to generate clearer responses.
-
-Ragas’ scores act like a "report card" to identify weaknesses.
+ Scan indirect dependencies pulled in by direct packages.
