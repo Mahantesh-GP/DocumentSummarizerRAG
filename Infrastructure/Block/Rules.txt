@@ -1,18 +1,26 @@
-Detect dependencies listed in vulnerability databases (e.g., CVE, NVD, OWASP Dependency-Check).
+using System;
+using System.Collections.Generic;
 
-Flag dependencies not updated to the latest stable version.
+public class TextChunker
+{
+    public static List<string> ChunkText(string text, int chunkSize = 500)
+    {
+        List<string> chunks = new List<string>();
+        string[] sentences = text.Split(new[] { ". ", "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+        
+        string currentChunk = "";
+        foreach (var sentence in sentences)
+        {
+            if ((currentChunk.Length + sentence.Length) > chunkSize)
+            {
+                chunks.Add(currentChunk.Trim());
+                currentChunk = "";
+            }
+            currentChunk += sentence + ". ";
+        }
+        if (!string.IsNullOrEmpty(currentChunk))
+            chunks.Add(currentChunk.Trim());
 
-<!-- UNSAFE: Using an outdated Entity Framework Core -->  
-<PackageReference Include="Microsoft.EntityFrameworkCore" Version="3.1.0" />  
-
- Ensure CI/CD pipelines include dependency scanning.
-
- Detect usage of deprecated methods/classes (e.g., WebClient in .NET).
-
- Ensure an SBOM is generated to track all components (e.g., using CycloneDX).
-
- Detect dependencies with no recent updates or community support.
-
- Flag insecure defaults (e.g., MongoDB without authentication, Redis exposed publicly).
-
- Scan indirect dependencies pulled in by direct packages.
+        return chunks;
+    }
+}
