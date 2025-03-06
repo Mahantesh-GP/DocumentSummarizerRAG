@@ -1,26 +1,34 @@
-using System;
-using System.Collections.Generic;
-
-public class TextChunker
+﻿[HttpPost("upload")]
+public async Task<IActionResult> UploadDocument(IFormFile file)
 {
-    public static List<string> ChunkText(string text, int chunkSize = 500)
+    if (file == null || file.Length == 0)
     {
-        List<string> chunks = new List<string>();
-        string[] sentences = text.Split(new[] { ". ", "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
-        
-        string currentChunk = "";
-        foreach (var sentence in sentences)
-        {
-            if ((currentChunk.Length + sentence.Length) > chunkSize)
-            {
-                chunks.Add(currentChunk.Trim());
-                currentChunk = "";
-            }
-            currentChunk += sentence + ". ";
-        }
-        if (!string.IsNullOrEmpty(currentChunk))
-            chunks.Add(currentChunk.Trim());
-
-        return chunks;
+        return BadRequest("Invalid file.");
     }
+
+    string filePath = Path.Combine(Path.GetTempPath(), file.FileName);
+    using (var stream = new FileStream(filePath, FileMode.Create))
+    {
+        await file.CopyToAsync(stream);
+    }
+
+    // 1️⃣ Extract Pages
+    List<string> pages = ExtractPagesFromPDF(filePath);
+    
+    // 2️⃣ Chunk Each Page
+    var allChunks = new List<(string Chunk, List<float> Embedding, int PageNumber)>();
+    foreach (var (text, pageIndex) in pages.Select((value, i) => (value, i + 1)))
+    {
+        var chunks = ChunkText(text); // Break text into smaller pieces
+        foreach (var chunk in chunks)
+        {
+            var embedding = await _openAIClient.GetEmbeddingsAsync(chunk);
+            allChunks.Add((chunk, embedding, pageIndex));
+        }
+    }
+
+    // 3️⃣ Upload Chunks to Azure Cognitive Search
+    await _azureSearchService.UploadChunksToSearchAsync(allChunks);
+
+    return Ok(new { message = "Document uploaded successfully!" });
 }
