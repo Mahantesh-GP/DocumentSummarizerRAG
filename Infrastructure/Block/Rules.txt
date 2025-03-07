@@ -1,180 +1,137 @@
-﻿using Azure;
-using Azure.Search.Documents;
-using Azure.Search.Documents.Models;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-
-public class AzureSearchService
+﻿public static async Task<string> ConvertToCsv(List<SearchDocument> documents)
 {
-    private readonly SearchClient _searchClient;
+    string filePath = Path.Combine(Path.GetTempPath(), "documents.csv");
 
-    public AzureSearchService(string searchServiceName, string indexName, string apiKey)
+    using (StreamWriter writer = new StreamWriter(filePath))
     {
-        Uri endpoint = new Uri($"https://{searchServiceName}.search.windows.net");
-        AzureKeyCredential credential = new AzureKeyCredential(apiKey);
-        _searchClient = new SearchClient(endpoint, indexName, credential);
-    }
+        await writer.WriteLineAsync("ID,Content,PageNumber"); // CSV Header
 
-    public async Task<List<SearchDocument>> GetAllUploadedDocumentsAsync()
-    {
-        var options = new SearchOptions
+        foreach (var doc in documents)
         {
-            Size = 1000, // Fetch up to 1000 documents
-            Select = { "id", "document_name", "upload_date", "page_count" } // Include only relevant fields
-        };
+            string id = doc["id"].ToString();
+            string content = doc["content"].ToString().Replace(",", " "); // Remove commas to avoid CSV issues
+            string pageNumber = doc["page_number"].ToString();
 
-        List<SearchDocument> results = new List<SearchDocument>();
-
-        await foreach (var result in _searchClient.SearchAsync<SearchDocument>("*", options))
-        {
-            results.Add(result.Document);
+            await writer.WriteLineAsync($"{id},{content},{pageNumber}");
         }
-
-        return results;
     }
+    
+    return filePath;
 }
 
+public static async Task<string> ConvertToJson(List<SearchDocument> documents)
+{
+    string filePath = Path.Combine(Path.GetTempPath(), "documents.json");
 
+    string json = JsonSerializer.Serialize(documents, new JsonSerializerOptions { WriteIndented = true });
+    await File.WriteAllTextAsync(filePath, json);
 
+    return filePath;
+}
 
+using iTextSharp.text;
+using iTextSharp.text.pdf;
 
+public static async Task<string> ConvertToPdf(List<SearchDocument> documents)
+{
+    string filePath = Path.Combine(Path.GetTempPath(), "documents.pdf");
+
+    using (FileStream fs = new FileStream(filePath, FileMode.Create))
+    {
+        Document doc = new Document();
+        PdfWriter.GetInstance(doc, fs);
+        doc.Open();
+
+        foreach (var document in documents)
+        {
+            doc.Add(new Paragraph($"ID: {document["id"]}"));
+            doc.Add(new Paragraph($"Content: {document["content"]}"));
+            doc.Add(new Paragraph($"Page Number: {document["page_number"]}"));
+            doc.Add(new Paragraph("--------------------------------------------------"));
+        }
+
+        doc.Close();
+    }
+
+    return filePath;
+}
 [ApiController]
-[Route("api/documents")]
-public class DocumentsController : ControllerBase
+[Route("api/download")]
+public class DownloadController : ControllerBase
 {
     private readonly AzureSearchService _searchService;
 
-    public DocumentsController(AzureSearchService searchService)
+    public DownloadController(AzureSearchService searchService)
     {
         _searchService = searchService;
     }
 
-    [HttpGet]
-    public async Task<IActionResult> GetAllDocuments()
+    [HttpGet("{format}")]
+    public async Task<IActionResult> DownloadAllDocuments(string format)
     {
-        var documents = await _searchService.GetAllUploadedDocumentsAsync();
-        return Ok(documents);
+        var documents = await _searchService.GetAllDocumentsAsync();
+        if (documents.Count == 0)
+        {
+            return NotFound("No documents found.");
+        }
+
+        string filePath = format switch
+        {
+            "csv" => await ConvertToCsv(documents),
+            "json" => await ConvertToJson(documents),
+            "pdf" => await ConvertToPdf(documents),
+            _ => throw new ArgumentException("Invalid format")
+        };
+
+        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+        string mimeType = format switch
+        {
+            "csv" => "text/csv",
+            "json" => "application/json",
+            "pdf" => "application/pdf",
+            _ => "application/octet-stream"
+        };
+
+        return File(fileBytes, mimeType, $"documents.{format}");
     }
 }
 
 
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Threading.Tasks;
-
-public class DocumentService
-{
-    private readonly HttpClient _httpClient;
-
-    public DocumentService(HttpClient httpClient)
-    {
-        _httpClient = httpClient;
-    }
-
-    public async Task<List<DocumentModel>> GetAllDocumentsAsync()
-    {
-        return await _httpClient.GetFromJsonAsync<List<DocumentModel>>("api/documents");
-    }
-}
-
-public class DocumentModel
-{
-    public string Id { get; set; }
-    public string DocumentName { get; set; }
-    public DateTime UploadDate { get; set; }
-    public int PageCount { get; set; }
-}
-
-
-@page "/documents"
-@inject DocumentService DocumentService
-
-<h3>Uploaded Documents</h3>
-
-@if (documents == null)
-{
-    <p>Loading...</p>
-}
-else if (documents.Count == 0)
-{
-    <p>No documents uploaded yet.</p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Document Name</th>
-                <th>Upload Date</th>
-                <th>Page Count</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var doc in documents)
-            {
-                <tr>
-                    <td>@doc.DocumentName</td>
-                    <td>@doc.UploadDate.ToString("yyyy-MM-dd")</td>
-                    <td>@doc.PageCount</td>
-                    <td>
-                        <button class="btn btn-primary" @onclick="() => ViewDocument(doc.Id)">View</button>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-
-@code {
-    private List<DocumentModel> documents;
-
-    protected override async Task OnInitializedAsync()
-    {
-        documents = await DocumentService.GetAllDocumentsAsync();
-    }
-
-    private void ViewDocument(string documentId)
-    {
-        NavigationManager.NavigateTo($"/document/{documentId}");
-    }
-}
-
-
-@page "/document/{documentId}"
-@inject DocumentService DocumentService
+@page "/download"
 @inject HttpClient Http
 
-<h3>Document Details</h3>
+<h3>Download Documents</h3>
 
-@if (document == null)
-{
-    <p>Loading...</p>
-}
-else
-{
-    <h4>@document.DocumentName</h4>
-    <p><strong>Uploaded:</strong> @document.UploadDate.ToString("yyyy-MM-dd")</p>
-    <p><strong>Page Count:</strong> @document.PageCount</p>
-
-    <h5>Chunks:</h5>
-    <ul>
-        @foreach (var chunk in document.Chunks)
-        {
-            <li>@chunk</li>
-        }
-    </ul>
-}
+<button class="btn btn-primary" @onclick="() => DownloadFile('csv')">Download CSV</button>
+<button class="btn btn-primary" @onclick="() => DownloadFile('json')">Download JSON</button>
+<button class="btn btn-primary" @onclick="() => DownloadFile('pdf')">Download PDF</button>
 
 @code {
-    [Parameter] public string DocumentId { get; set; }
-    private DocumentModel document;
-
-    protected override async Task OnInitializedAsync()
+    private async Task DownloadFile(string format)
     {
-        document = await Http.GetFromJsonAsync<DocumentModel>($"api/documents/{DocumentId}");
+        var fileUrl = $"api/download/{format}";
+        await JS.InvokeVoidAsync("window.open", fileUrl, "_blank");
     }
 }
+
+
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+builder.Services.AddHttpClient();
+
+builder.Services.AddSingleton(new AzureSearchService(
+    "your-search-service-name",
+    "your-index-name",
+    "your-api-key"
+));
+
+var app = builder.Build();
+
+app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
+app.Run();
+
