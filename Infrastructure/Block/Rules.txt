@@ -1,137 +1,112 @@
-﻿public static async Task<string> ConvertToCsv(List<SearchDocument> documents)
+﻿public async Task<List<string>> GetAllDocumentsAsync()
 {
-    string filePath = Path.Combine(Path.GetTempPath(), "documents.csv");
-
-    using (StreamWriter writer = new StreamWriter(filePath))
+    var options = new SearchOptions
     {
-        await writer.WriteLineAsync("ID,Content,PageNumber"); // CSV Header
+        Select = { "documentId" }, // ✅ Fetch only document IDs or titles
+        Size = 100 // ✅ Limit to 100 documents (adjust as needed)
+    };
 
-        foreach (var doc in documents)
+    var results = await _searchClient.SearchAsync<SearchDocument>("*", options);
+    List<string> documentIds = new();
+
+    await foreach (var result in results.Value.GetResultsAsync())
+    {
+        documentIds.Add(result.Document["documentId"].ToString());
+    }
+
+    return documentIds;
+}
+
+
+[HttpGet("documents")]
+public async Task<IActionResult> GetDocuments()
+{
+    var documentList = await _azureSearchService.GetAllDocumentsAsync();
+    return Ok(documentList);
+}
+
+
+@page "/document-summary"
+@inject ApiService ApiService
+
+<h3>📄 AI-Powered Document Assistant</h3>
+
+<!-- ✅ Dropdown to Select a Document -->
+<select @bind="selectedDocumentId" class="form-select">
+    <option disabled selected>Select a document</option>
+    @foreach (var doc in documentList)
+    {
+        <option value="@doc">@doc</option>
+    }
+</select>
+
+<!-- Chat UI -->
+<div class="chat-container">
+    <div class="chat-messages">
+        @foreach (var message in chatMessages)
         {
-            string id = doc["id"].ToString();
-            string content = doc["content"].ToString().Replace(",", " "); // Remove commas to avoid CSV issues
-            string pageNumber = doc["page_number"].ToString();
-
-            await writer.WriteLineAsync($"{id},{content},{pageNumber}");
+            <div class="chat-message @(message.IsUser ? "user-message" : "bot-message")">
+                <strong>@(message.IsUser ? "You" : "AI"):</strong> @message.Text
+            </div>
         }
-    }
-    
-    return filePath;
-}
+    </div>
 
-public static async Task<string> ConvertToJson(List<SearchDocument> documents)
-{
-    string filePath = Path.Combine(Path.GetTempPath(), "documents.json");
+    <div class="chat-input">
+        <input type="text" @bind="userQuery" placeholder="Ask about your document..." class="form-control" />
+        <button @onclick="SendQuery" class="btn btn-primary mt-2" disabled="@isLoading || string.IsNullOrEmpty(userQuery)">Ask AI</button>
+    </div>
 
-    string json = JsonSerializer.Serialize(documents, new JsonSerializerOptions { WriteIndented = true });
-    await File.WriteAllTextAsync(filePath, json);
-
-    return filePath;
-}
-
-using iTextSharp.text;
-using iTextSharp.text.pdf;
-
-public static async Task<string> ConvertToPdf(List<SearchDocument> documents)
-{
-    string filePath = Path.Combine(Path.GetTempPath(), "documents.pdf");
-
-    using (FileStream fs = new FileStream(filePath, FileMode.Create))
+    @if (isLoading)
     {
-        Document doc = new Document();
-        PdfWriter.GetInstance(doc, fs);
-        doc.Open();
-
-        foreach (var document in documents)
-        {
-            doc.Add(new Paragraph($"ID: {document["id"]}"));
-            doc.Add(new Paragraph($"Content: {document["content"]}"));
-            doc.Add(new Paragraph($"Page Number: {document["page_number"]}"));
-            doc.Add(new Paragraph("--------------------------------------------------"));
-        }
-
-        doc.Close();
+        <div class="spinner-border text-primary mt-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
     }
-
-    return filePath;
-}
-[ApiController]
-[Route("api/download")]
-public class DownloadController : ControllerBase
-{
-    private readonly AzureSearchService _searchService;
-
-    public DownloadController(AzureSearchService searchService)
-    {
-        _searchService = searchService;
-    }
-
-    [HttpGet("{format}")]
-    public async Task<IActionResult> DownloadAllDocuments(string format)
-    {
-        var documents = await _searchService.GetAllDocumentsAsync();
-        if (documents.Count == 0)
-        {
-            return NotFound("No documents found.");
-        }
-
-        string filePath = format switch
-        {
-            "csv" => await ConvertToCsv(documents),
-            "json" => await ConvertToJson(documents),
-            "pdf" => await ConvertToPdf(documents),
-            _ => throw new ArgumentException("Invalid format")
-        };
-
-        var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-        string mimeType = format switch
-        {
-            "csv" => "text/csv",
-            "json" => "application/json",
-            "pdf" => "application/pdf",
-            _ => "application/octet-stream"
-        };
-
-        return File(fileBytes, mimeType, $"documents.{format}");
-    }
-}
-
-
-@page "/download"
-@inject HttpClient Http
-
-<h3>Download Documents</h3>
-
-<button class="btn btn-primary" @onclick="() => DownloadFile('csv')">Download CSV</button>
-<button class="btn btn-primary" @onclick="() => DownloadFile('json')">Download JSON</button>
-<button class="btn btn-primary" @onclick="() => DownloadFile('pdf')">Download PDF</button>
+</div>
 
 @code {
-    private async Task DownloadFile(string format)
+    private List<string> documentList = new();
+    private string selectedDocumentId;
+    private string userQuery;
+    private bool isLoading;
+    private List<ChatMessage> chatMessages = new();
+
+    protected override async Task OnInitializedAsync()
     {
-        var fileUrl = $"api/download/{format}";
-        await JS.InvokeVoidAsync("window.open", fileUrl, "_blank");
+        documentList = await ApiService.GetAllDocumentsAsync();
+    }
+
+    private async Task SendQuery()
+    {
+        if (string.IsNullOrEmpty(selectedDocumentId) || string.IsNullOrEmpty(userQuery)) return;
+
+        isLoading = true;
+        chatMessages.Add(new ChatMessage { Text = userQuery, IsUser = true });
+        StateHasChanged();
+
+        var response = await ApiService.GetSummaryAsync(selectedDocumentId, userQuery);
+        chatMessages.Add(new ChatMessage { Text = response, IsUser = false });
+
+        isLoading = false;
+        userQuery = string.Empty;
+    }
+
+    private class ChatMessage
+    {
+        public string Text { get; set; }
+        public bool IsUser { get; set; }
     }
 }
 
 
 
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-builder.Services.AddHttpClient();
+📌 Modify ApiService.cs
+public async Task<List<string>> GetAllDocumentsAsync()
+{
+    return await _httpClient.GetFromJsonAsync<List<string>>("api/summarizer/documents");
+}
 
-builder.Services.AddSingleton(new AzureSearchService(
-    "your-search-service-name",
-    "your-index-name",
-    "your-api-key"
-));
-
-var app = builder.Build();
-
-app.UseHttpsRedirection();
-app.UseAuthorization();
-app.MapControllers();
-app.Run();
-
+public async Task<string> GetSummaryAsync(string documentId, string query)
+{
+    return await _httpClient.GetStringAsync($"api/summarizer/summarize?documentId={documentId}&query={query}");
+}
