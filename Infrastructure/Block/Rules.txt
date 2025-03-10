@@ -1,60 +1,38 @@
-﻿public async Task<List<string>> GetAllDocumentsAsync()
-{
-    var options = new SearchOptions
+public string GetFileUrl(string fileName)
     {
-        Select = { "documentId" }, // ✅ Fetch only document IDs or titles
-        Size = 100 // ✅ Limit to 100 documents (adjust as needed)
-    };
-
-    var results = await _searchClient.SearchAsync<SearchDocument>("*", options);
-    List<string> documentIds = new();
-
-    await foreach (var result in results.Value.GetResultsAsync())
-    {
-        documentIds.Add(result.Document["documentId"].ToString());
+        var blobContainer = _blobServiceClient.GetBlobContainerClient(_containerName);
+        var blobClient = blobContainer.GetBlobClient(fileName);
+        return blobClient.Uri.ToString(); // ✅ Returns direct download link
     }
 
-    return documentIds;
-}
-
-
-[HttpGet("documents")]
-public async Task<IActionResult> GetDocuments()
+[HttpGet("download")]
+public IActionResult GetFileUrl([FromQuery] string fileName)
 {
-    var documentList = await _azureSearchService.GetAllDocumentsAsync();
-    return Ok(documentList);
+    if (string.IsNullOrEmpty(fileName))
+        return BadRequest("File name is required.");
+
+    var fileUrl = _azureStorageService.GetFileUrl(fileName);
+    return Ok(new { FileUrl = fileUrl });
 }
 
-
-@page "/document-summary"
 @inject ApiService ApiService
 
-<h3>📄 AI-Powered Document Assistant</h3>
+<h3>📂 Upload and Download Files</h3>
 
-<!-- ✅ Dropdown to Select a Document -->
-<select @bind="selectedDocumentId" class="form-select">
-    <option disabled selected>Select a document</option>
-    @foreach (var doc in documentList)
+<div class="container">
+    <div class="card p-3">
+        <h5>Upload Document</h5>
+        <input type="file" @onchange="OnFileSelected" class="form-control" />
+        <button @onclick="UploadFile" class="btn btn-primary mt-2" disabled="@isLoading">Upload</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(uploadedFileUrl))
     {
-        <option value="@doc">@doc</option>
+        <div class="card p-3 mt-3">
+            <h5>Download Document</h5>
+            <a href="@uploadedFileUrl" target="_blank" class="btn btn-success">Download File</a>
+        </div>
     }
-</select>
-
-<!-- Chat UI -->
-<div class="chat-container">
-    <div class="chat-messages">
-        @foreach (var message in chatMessages)
-        {
-            <div class="chat-message @(message.IsUser ? "user-message" : "bot-message")">
-                <strong>@(message.IsUser ? "You" : "AI"):</strong> @message.Text
-            </div>
-        }
-    </div>
-
-    <div class="chat-input">
-        <input type="text" @bind="userQuery" placeholder="Ask about your document..." class="form-control" />
-        <button @onclick="SendQuery" class="btn btn-primary mt-2" disabled="@isLoading || string.IsNullOrEmpty(userQuery)">Ask AI</button>
-    </div>
 
     @if (isLoading)
     {
@@ -65,48 +43,25 @@ public async Task<IActionResult> GetDocuments()
 </div>
 
 @code {
-    private List<string> documentList = new();
-    private string selectedDocumentId;
-    private string userQuery;
+    private IBrowserFile selectedFile;
     private bool isLoading;
-    private List<ChatMessage> chatMessages = new();
+    private string uploadedFileUrl;
 
-    protected override async Task OnInitializedAsync()
+    private void OnFileSelected(ChangeEventArgs e)
     {
-        documentList = await ApiService.GetAllDocumentsAsync();
+        selectedFile = (IBrowserFile)e.Value;
     }
 
-    private async Task SendQuery()
+    private async Task UploadFile()
     {
-        if (string.IsNullOrEmpty(selectedDocumentId) || string.IsNullOrEmpty(userQuery)) return;
+        if (selectedFile == null) return;
 
         isLoading = true;
-        chatMessages.Add(new ChatMessage { Text = userQuery, IsUser = true });
         StateHasChanged();
 
-        var response = await ApiService.GetSummaryAsync(selectedDocumentId, userQuery);
-        chatMessages.Add(new ChatMessage { Text = response, IsUser = false });
+        var fileUrl = await ApiService.UploadFileAsync(selectedFile);
+        uploadedFileUrl = fileUrl;
 
         isLoading = false;
-        userQuery = string.Empty;
     }
-
-    private class ChatMessage
-    {
-        public string Text { get; set; }
-        public bool IsUser { get; set; }
-    }
-}
-
-
-
-📌 Modify ApiService.cs
-public async Task<List<string>> GetAllDocumentsAsync()
-{
-    return await _httpClient.GetFromJsonAsync<List<string>>("api/summarizer/documents");
-}
-
-public async Task<string> GetSummaryAsync(string documentId, string query)
-{
-    return await _httpClient.GetStringAsync($"api/summarizer/summarize?documentId={documentId}&query={query}");
 }
