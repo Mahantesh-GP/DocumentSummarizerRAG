@@ -1,67 +1,77 @@
-public string GetFileUrl(string fileName)
-    {
-        var blobContainer = _blobServiceClient.GetBlobContainerClient(_containerName);
-        var blobClient = blobContainer.GetBlobClient(fileName);
-        return blobClient.Uri.ToString(); // ✅ Returns direct download link
-    }
 
-[HttpGet("download")]
-public IActionResult GetFileUrl([FromQuery] string fileName)
-{
-    if (string.IsNullOrEmpty(fileName))
-        return BadRequest("File name is required.");
+@page "/example"
 
-    var fileUrl = _azureStorageService.GetFileUrl(fileName);
-    return Ok(new { FileUrl = fileUrl });
-}
+<h3>Configure</h3>
 
-@inject ApiService ApiService
+<div>
+    <label for="name">Name</label>
+    <input id="name" type="text" class="form-control mb-2" placeholder="Name your GPT" />
 
-<h3>📂 Upload and Download Files</h3>
+    <label for="description">Description</label>
+    <input id="description" type="text" class="form-control mb-2" placeholder="A GPT that answers only math-related questions" />
 
-<div class="container">
-    <div class="card p-3">
-        <h5>Upload Document</h5>
-        <input type="file" @onchange="OnFileSelected" class="form-control" />
-        <button @onclick="UploadFile" class="btn btn-primary mt-2" disabled="@isLoading">Upload</button>
+    <label for="instructions">Instructions</label>
+    <textarea id="instructions" class="form-control mb-2" placeholder="Write the details here"></textarea>
+
+    <div class="d-flex align-items-center">
+        <label class="me-2">Example</label>
+        <button @onclick="AddExample" class="btn btn-primary" disabled="@(examples.Count >= 4)">+</button>
     </div>
 
-    @if (!string.IsNullOrEmpty(uploadedFileUrl))
+    @for (int i = 0; i < examples.Count; i++)
     {
-        <div class="card p-3 mt-3">
-            <h5>Download Document</h5>
-            <a href="@uploadedFileUrl" target="_blank" class="btn btn-success">Download File</a>
-        </div>
+        <input type="text" @bind="examples[i]" class="form-control mb-2" placeholder="Write the example" />
     }
 
-    @if (isLoading)
+    <button @onclick="SaveExamples" class="btn btn-success mt-2">Save</button>
+</div>
+
+<h3>Preview</h3>
+<div class="d-flex flex-wrap">
+    @foreach (var example in examples)
     {
-        <div class="spinner-border text-primary mt-3" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
+        <button class="btn btn-outline-primary m-1 example-box" @onclick="() => SelectExample(example)">
+            @example
+        </button>
     }
 </div>
 
+@if (message != null)
+{
+    <p class="text-success">@message</p>
+}
+
 @code {
-    private IBrowserFile selectedFile;
-    private bool isLoading;
-    private string uploadedFileUrl;
+    private List<string> examples = new List<string>();
+    private string? message;
+    private string? selectedExample;
 
-    private void OnFileSelected(ChangeEventArgs e)
+    private void AddExample()
     {
-        selectedFile = (IBrowserFile)e.Value;
+        if (examples.Count < 4)
+        {
+            examples.Add(string.Empty);
+        }
     }
 
-    private async Task UploadFile()
+    private async Task SaveExamples()
     {
-        if (selectedFile == null) return;
-
-        isLoading = true;
-        StateHasChanged();
-
-        var fileUrl = await ApiService.UploadFileAsync(selectedFile);
-        uploadedFileUrl = fileUrl;
-
-        isLoading = false;
+        var response = await Http.PostAsJsonAsync("api/examples/save", examples);
+        if (response.IsSuccessStatusCode)
+        {
+            message = "Examples saved successfully!";
+        }
+        else
+        {
+            message = "Error saving examples.";
+        }
     }
+
+    private void SelectExample(string example)
+    {
+        selectedExample = example;
+        message = $"Selected: {example}";
+    }
+
+    [Inject] HttpClient Http { get; set; }
 }
