@@ -1,67 +1,30 @@
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
-using Azure;
-using Azure.AI.Vision;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
-using System.Net.Http;
-using System;
 
-public static class ExtractFieldsWithOCR
+public static class ExtractFieldsFromOCR
 {
-    private static readonly HttpClient httpClient = new HttpClient();
-    private static readonly string visionEndpoint = "https://[your-vision-resource].cognitiveservices.azure.com/";
-    private static readonly string visionKey = "[your-vision-api-key]";
-
-    [FunctionName("ExtractFieldsWithOCR")]
+    [FunctionName("ExtractFieldsFromOCR")]
     public static async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
         ILogger log)
     {
         string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
         dynamic data = JObject.Parse(requestBody);
-        string fileData = data.values[0].data.file_data; // Base64-encoded PDF
-
-        // Convert base64 to binary
-        byte[] pdfBytes = Convert.FromBase64String(fileData);
-
-        // Call Vision API for OCR
-        string ocrUrl = $"{visionEndpoint}vision/v3.2/read/analyze";
-        httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", visionKey);
-        var content = new ByteArrayContent(pdfBytes);
-        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
-        var response = await httpClient.PostAsync(ocrUrl, content);
-
-        // Get the operation location
-        string operationLocation = response.Headers.GetValues("Operation-Location").First();
-        string resultUrl = operationLocation + "/results";
-        string ocrResult;
-        do
-        {
-            await Task.Delay(1000); // Wait for OCR to complete
-            var resultResponse = await httpClient.GetAsync(resultUrl);
-            ocrResult = await resultResponse.Content.ReadAsStringAsync();
-        } while (!ocrResult.Contains("succeeded"));
-
-        // Parse OCR result
-        dynamic ocrData = JObject.Parse(ocrResult);
-        string extractedText = "";
-        foreach (var line in ocrData.analyzeResult.readResults[0].lines)
-        {
-            extractedText += line.text + "\n";
-        }
+        string ocrText = data.values[0].data.text; // Assume OCR text is passed here
 
         // Extract fields using regex
-        var policyNumberMatch = Regex.Match(extractedText, @"Policy\s*Number:\s*(\w+)");
-        var orderNumberMatch = Regex.Match(extractedText, @"Order\s*Number:\s*(\w+)");
-        var propertyAddressMatch = Regex.Match(extractedText, @"Property\s*Address:\s*(.+?)(?:\n|$)");
-        var closingDateMatch = Regex.Match(extractedText, @"Closing\s*Date:\s*(\d{2}/\d{2}/\d{4})");
-        var borrowerNameMatch = Regex.Match(extractedText, @"Borrower\s*Name:\s*(.+?)(?:\n|$)");
-        var sellerNameMatch = Regex.Match(extractedText, @"Seller\s*Name:\s*(.+?)(?:\n|$)");
-        var buyerNameMatch = Regex.Match(extractedText, @"Buyer\s*Name:\s*(.+?)(?:\n|$)");
-        var policyDateMatch = Regex.Match(extractedText, @"Policy\s*Date:\s*(\d{2}/\d{2}/\d{4})");
+        var policyNumberMatch = Regex.Match(ocrText, @"Policy\s*Number:\s*(\w+)");
+        var orderNumberMatch = Regex.Match(ocrText, @"Order\s*Number:\s*(\w+)");
+        var propertyAddressMatch = Regex.Match(ocrText, @"Property\s*Address:\s*(.+?)(?:\n|$)");
+        var closingDateMatch = Regex.Match(ocrText, @"Closing\s*Date:\s*(\d{2}/\d{2}/\d{4})");
+        var borrowerNameMatch = Regex.Match(ocrText, @"Borrower\s*Name:\s*(.+?)(?:\n|$)");
+        var sellerNameMatch = Regex.Match(ocrText, @"Seller\s*Name:\s*(.+?)(?:\n|$)");
+        var buyerNameMatch = Regex.Match(ocrText, @"Buyer\s*Name:\s*(.+?)(?:\n|$)");
+        var policyDateMatch = Regex.Match(ocrText, @"Policy\s*Date:\s*(\d{2}/\d{2}/\d{4})");
 
         var result = new
         {
@@ -78,7 +41,6 @@ public static class ExtractFieldsWithOCR
         return new OkObjectResult(new { values = new[] { new { recordId = data.values[0].recordId, data = result } } });
     }
 }
-
 
 
 {
