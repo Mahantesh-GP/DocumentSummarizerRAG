@@ -141,3 +141,32 @@ public static class ExtractFieldsWithOCR
   { "sourceFieldName": "/document/policyDate", "targetFieldName": "policyDate" },
   { "sourceFieldName": "/document/closingDate", "targetFieldName": "documentDate" }
 ]
+
+
+
+{
+  "name": "title-insurance-index",
+  "fields": [
+    { "name": "id", "type": "Edm.String", "key": true, "searchable": false },
+    { "name": "contentVector", "type": "Collection(Edm.Single)", "searchable": true, "vectorSearchProfile": "myVectorProfile" },
+    { "name": "content", "type": "Edm.String", "searchable": true, "retrievable": true },
+    { "name": "documentDate", "type": "Edm.DateTimeOffset", "filterable": true, "sortable": true, "retrievable": true },
+    { "name": "fileName", "type": "Edm.String", "searchable": false, "retrievable": true },
+    { "name": "policyNumber", "type": "Edm.String", "searchable": true, "filterable": true, "retrievable": true },
+    { "name": "orderNumber", "type": "Edm.String", "searchable": true, "filterable": true, "retrievable": true },
+    { "name": "borrowerName", "type": "Edm.String", "searchable": true, "filterable": true, "retrievable": true },
+    { "name": "sellerName", "type": "Edm.String", "searchable": true, "filterable": true, "retrievable": true },
+    { "name": "buyerName", "type": "Edm.String", "searchable": true, "filterable": true, "retrievable": true },
+    { "name": "propertyAddress", "type": "Edm.String", "searchable": true, "filterable": true, "retrievable": true },
+    { "name": "closingDate", "type": "Edm.DateTimeOffset", "searchable": true, "filterable": true, "retrievable": true },
+    { "name": "policyDate", "type": "Edm.DateTimeOffset", "searchable": true, "filterable": true, "retrievable": true }
+  ],
+  "vectorSearch": {
+    "profiles": [
+      { "name": "myVectorProfile", "algorithm": "hnsw", "similarity": "cosine" }
+    ]
+  },
+  "suggesters": [
+    { "name": "sg", "searchMode": "analyzingInfixMatching", "sourceFields": ["policyNumber", "borrowerName", "propertyAddress"] }
+  ]
+}
