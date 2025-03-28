@@ -1,1 +1,61 @@
 
+public class WebApiSkillRequest
+{
+    public List<WebApiSkillRequestRecord> Values { get; set; }
+}
+
+public class WebApiSkillRequestRecord
+{
+    public string RecordId { get; set; }
+    public Dictionary<string, string> Data { get; set; }
+}
+
+public class WebApiSkillResponse
+{
+    public List<WebApiSkillResponseRecord> Values { get; set; }
+}
+
+public class WebApiSkillResponseRecord
+{
+    public string RecordId { get; set; }
+    public Dictionary<string, object> Data { get; set; }
+}
+
+[FunctionName("ExtractFieldsFromOCR")]
+public static async Task<IActionResult> Run(
+    [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+    ILogger log)
+{
+    string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+    var input = JsonConvert.DeserializeObject<WebApiSkillRequest>(requestBody);
+
+    var response = new WebApiSkillResponse
+    {
+        Values = new List<WebApiSkillResponseRecord>()
+    };
+
+    foreach (var record in input.Values)
+    {
+        var ocrText = record.Data.ContainsKey("text") ? record.Data["text"] : string.Empty;
+
+        var data = new Dictionary<string, object>
+        {
+            ["policyNumber"] = Regex.Match(ocrText, @"Policy\s*Number:\s*(\w+)")?.Groups[1].Value,
+            ["orderNumber"] = Regex.Match(ocrText, @"Order\s*Number:\s*(\w+)")?.Groups[1].Value,
+            ["propertyAddress"] = Regex.Match(ocrText, @"Property\s*Address:\s*(.+?)(?:\n|$)")?.Groups[1].Value,
+            ["closingDate"] = Regex.Match(ocrText, @"Closing\s*Date:\s*(\d{2}/\d{2}/\d{4})")?.Groups[1].Value,
+            ["borrowerName"] = Regex.Match(ocrText, @"Borrower\s*Name:\s*(.+?)(?:\n|$)")?.Groups[1].Value,
+            ["sellerName"] = Regex.Match(ocrText, @"Seller\s*Name:\s*(.+?)(?:\n|$)")?.Groups[1].Value,
+            ["buyerName"] = Regex.Match(ocrText, @"Buyer\s*Name:\s*(.+?)(?:\n|$)")?.Groups[1].Value,
+            ["policyDate"] = Regex.Match(ocrText, @"Policy\s*Date:\s*(\d{2}/\d{2}/\d{4})")?.Groups[1].Value
+        };
+
+        response.Values.Add(new WebApiSkillResponseRecord
+        {
+            RecordId = record.RecordId,
+            Data = data
+        });
+    }
+
+    return new OkObjectResult(response);
+}
