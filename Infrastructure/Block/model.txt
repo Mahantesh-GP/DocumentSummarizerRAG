@@ -59,3 +59,63 @@ public static async Task<IActionResult> Run(
 
     return new OkObjectResult(response);
 }
+
+
+tring text = record.Data.ContainsKey("text") ? record.Data["text"] : string.Empty;
+
+            string policyNumber = MatchOrNull(text, @"Policy\s*Number:\s*(\w+)");
+            string orderNumber = MatchOrNull(text, @"Order\s*Number:\s*(\w+)");
+            string propertyAddress = MatchOrNull(text, @"Property\s*Address:\s*(.+?)(?:\n|$)");
+            string closingDate = MatchOrNull(text, @"Closing\s*Date:\s*(\d{2}/\d{2}/\d{4})");
+            string borrowerName = MatchOrNull(text, @"Borrower\s*\s*(.+?)(?:\n|$)");
+            string sellerName = MatchOrNull(text, @"Seller\s*\s*(.+?)(?:\n|$)");
+            string buyerName = MatchOrNull(text, @"Buyer\s*\s*(.+?)(?:\n|$)");
+            string policyDate = MatchOrNull(text, @"Policy\s*Date:\s*(\d{2}/\d{2}/\d{4})");
+
+            // Tag document type
+            string documentType = text.ToLower().Contains("policy number") ? "Policy" :
+                                   text.ToLower().Contains("deed") ? "Sale Deed" :
+                                   text.ToLower().Contains("mortgage") ? "Mortgage" : "Unknown";
+
+            // Pre-categorize field
+            string category = documentType switch
+            {
+                "Policy" => "Insurance",
+                "Mortgage" => "Loan",
+                "Sale Deed" => "Real Estate",
+                _ => "General"
+            };
+
+            // Simple summary (first 300 chars as placeholder)
+            string summary = text.Length > 300 ? text.Substring(0, 300) + "..." : text;
+
+            var data = new Dictionary<string, object>
+            {
+                { "policyNumber", policyNumber },
+                { "orderNumber", orderNumber },
+                { "propertyAddress", propertyAddress },
+                { "closingDate", closingDate },
+                { "borrowerName", borrowerName },
+                { "sellerName", sellerName },
+                { "buyerName", buyerName },
+                { "policyDate", policyDate },
+                { "documentType", documentType },
+                { "category", category },
+                { "summary", summary }
+            };
+
+            response.Values.Add(new WebApiSkillResponseRecord
+            {
+                RecordId = record.RecordId,
+                Data = data
+            });
+        }
+
+        return new OkObjectResult(response);
+    }
+
+    private static string MatchOrNull(string input, string pattern)
+    {
+        var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups[1].Value.Trim() : null;
+    }
