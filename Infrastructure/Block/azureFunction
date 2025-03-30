@@ -38,20 +38,15 @@ public static class ExtractAndTagFieldsFunction
             string text = record.Data.ContainsKey("text") ? record.Data["text"] : string.Empty;
             string blobPath = record.Data.ContainsKey("metadata_storage_path") ? record.Data["metadata_storage_path"] : string.Empty;
 
-            // Extract processId from content using regex
             string processId = MatchOrNull(text, @"(Order|File|Commitment|Loan)[^\w\n]*([\w-]+)", 2) ?? Guid.NewGuid().ToString();
 
-            // Extract groupType using OpenAI
-            string groupPrompt = $@"
-Based on the document content, classify it into one of the following group types:
+            string groupPrompt = $@"Based on the document content, classify it into one of the following group types:
 TitleExpress, ChainOfTitle, E-Closing, CommercialExceptions, OwnerSearch, Unknown.
 
 Only return the group type name.
 
 Text:
-"""
-{text}
-"""";
+{text}";
 
             var groupOptions = new ChatCompletionsOptions
             {
@@ -64,9 +59,7 @@ Text:
             var groupResponse = await openAiClient.GetChatCompletionsAsync(groupOptions);
             string groupType = groupResponse.Value.Choices[0].Message.Content?.Trim();
 
-            // Field extraction
-            var fieldPrompt = $@"
-Extract the following fields from this property document:
+            string fieldPrompt = $@"Extract the following fields from this property document:
 - buyerName
 - sellerName
 - closingDate
@@ -76,9 +69,7 @@ Extract the following fields from this property document:
 Return the response as a JSON object with keys: buyerName, sellerName, closingDate, policyDate, summary.
 
 Text:
-"""
-{text}
-"""";
+{text}";
 
             var fieldOptions = new ChatCompletionsOptions
             {
@@ -102,15 +93,11 @@ Text:
                 log.LogError($"Failed to parse OpenAI field extraction response: {ex.Message}");
             }
 
-            // Document type classification
-            var typePrompt = $@"
-Classify the type of the following title-related document. The possible categories are: Commitment, Deed, Policy, Chain of Title, Exceptions, Closing Disclosure, or Unknown.
+            string typePrompt = $@"Classify the type of the following title-related document. The possible categories are: Commitment, Deed, Policy, Chain of Title, Exceptions, Closing Disclosure, or Unknown.
 Only respond with the document type.
 
 Document Text:
-"""
 {text}
-"""
 
 Document Type:";
 
