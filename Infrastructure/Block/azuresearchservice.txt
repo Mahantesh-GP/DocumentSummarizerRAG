@@ -1,0 +1,97 @@
+using Azure;
+using Azure.Search.Documents;
+using Azure.Search.Documents.Indexes;
+using Azure.Search.Documents.Models;
+using Microsoft.Extensions.Configuration;
+
+public class AzureSearchService
+{
+    private readonly IConfiguration _config;
+    private readonly SearchClient _searchClient;
+
+    public AzureSearchService(IConfiguration config)
+    {
+        _config = config;
+        var endpoint = new Uri(_config["AzureSearch:Endpoint"]);
+        var credential = new AzureKeyCredential(_config["AzureSearch:ApiKey"]);
+        _searchClient = new SearchClient(endpoint, _config["AzureSearch:IndexName"], credential);
+    }
+
+    public async Task<List<RelatedDocGroup>> HybridSearchAsync(string query)
+    {
+        var options = new SearchOptions { Size = 20 };
+        options.Select.Add("processId");
+        options.Select.Add("summary");
+        options.Select.Add("blobUrl");
+        options.Select.Add("documentType");
+        options.Select.Add("groupType");
+        options.Select.Add("isReviewed");
+        options.Select.Add("isDeleted");
+
+        var results = await _searchClient.SearchAsync<SearchDocument>(query, options);
+        var grouped = new Dictionary<string, RelatedDocGroup>();
+
+        await foreach (var item in results.Value.GetResultsAsync())
+        {
+            var doc = item.Document;
+            var processId = doc["processId"]?.ToString() ?? "unknown";
+
+            if (!grouped.ContainsKey(processId))
+            {
+                grouped[processId] = new RelatedDocGroup
+                {
+                    ProcessId = processId,
+                    Summary = doc["summary"]?.ToString(),
+                    Documents = new List<RelatedDoc>()
+                };
+            }
+
+            grouped[processId].Documents.Add(new RelatedDoc
+            {
+                Name = Path.GetFileName(doc["blobUrl"]?.ToString()),
+                Url = doc["blobUrl"]?.ToString(),
+                Type = doc["documentType"]?.ToString(),
+                IsReviewed = doc.ContainsKey("isReviewed") && (bool)doc["isReviewed"],
+                IsDeleted = doc.ContainsKey("isDeleted") && (bool)doc["isDeleted"]
+            });
+        }
+
+        return grouped.Values.ToList();
+    }
+
+    public async Task UpdateStatusAsync(DocumentStatusRequest request)
+    {
+        var patch = new Dictionary<string, object>
+        {
+            ["@search.action"] = "merge",
+            ["blobUrl"] = request.BlobUrl,
+            ["isReviewed"] = request.IsReviewed,
+            ["isDeleted"] = request.IsDeleted
+        };
+
+        await _searchClient.MergeOrUploadDocumentsAsync(new[] { patch });
+    }
+}
+
+public class RelatedDocGroup
+{
+    public string ProcessId { get; set; }
+    public string Summary { get; set; }
+    public List<RelatedDoc> Documents { get; set; }
+}
+
+public class RelatedDoc
+{
+    public string Name { get; set; }
+    public string Url { get; set; }
+    public string Type { get; set; }
+    public bool IsReviewed { get; set; }
+    public bool IsDeleted { get; set; }
+}
+
+public class DocumentStatusRequest
+{
+    public string BlobUrl { get; set; }
+    public bool IsReviewed { get; set; }
+    public bool IsDeleted { get; set; }
+}
