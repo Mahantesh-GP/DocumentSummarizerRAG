@@ -25,3 +25,23 @@ public class DocumentController : ControllerBase
         return Ok();
     }
 }
+
+
+[ApiController]
+[Route("api/[controller]")]
+public class SearchController : ControllerBase
+{
+    private readonly AzureSearchService _searchService;
+
+    public SearchController(AzureSearchService searchService)
+    {
+        _searchService = searchService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Search([FromQuery] string query)
+    {
+        var results = await _searchService.HybridSearchAsync(query);
+        return Ok(results);
+    }
+}
