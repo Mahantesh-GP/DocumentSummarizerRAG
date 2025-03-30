@@ -1,0 +1,214 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using Azure;
+using Azure.AI.OpenAI;
+using System;
+using System.Globalization;
+
+public static class ExtractAndTagFieldsFunction
+{
+    [FunctionName("ExtractAndTagFields")]
+    public static async Task<IActionResult> Run(
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+        ILogger log)
+    {
+        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        var input = JsonConvert.DeserializeObject<WebApiSkillRequest>(requestBody);
+
+        var response = new WebApiSkillResponse
+        {
+            Values = new List<WebApiSkillResponseRecord>()
+        };
+
+        var openAiClient = new OpenAIClient(
+            new Uri("https://<your-openai-resource>.openai.azure.com/"),
+            new AzureKeyCredential("<your-openai-api-key>")
+        );
+
+        foreach (var record in input.Values)
+        {
+            string text = record.Data.ContainsKey("text") ? record.Data["text"] : string.Empty;
+            string blobPath = record.Data.ContainsKey("metadata_storage_path") ? record.Data["metadata_storage_path"] : string.Empty;
+
+            // Extract processId from content using regex
+            string processId = MatchOrNull(text, @"(Order|File|Commitment|Loan)[^\w\n]*([\w-]+)", 2) ?? Guid.NewGuid().ToString();
+
+            // Extract groupType using OpenAI
+            string groupPrompt = $@"
+Based on the document content, classify it into one of the following group types:
+TitleExpress, ChainOfTitle, E-Closing, CommercialExceptions, OwnerSearch, Unknown.
+
+Only return the group type name.
+
+Text:
+"""
+{text}
+"""";
+
+            var groupOptions = new ChatCompletionsOptions
+            {
+                DeploymentName = "gpt-35-turbo",
+                Temperature = 0
+            };
+            groupOptions.Messages.Add(new ChatMessage(ChatRole.System, "You are an AI assistant that classifies title documents into predefined group types."));
+            groupOptions.Messages.Add(new ChatMessage(ChatRole.User, groupPrompt));
+
+            var groupResponse = await openAiClient.GetChatCompletionsAsync(groupOptions);
+            string groupType = groupResponse.Value.Choices[0].Message.Content?.Trim();
+
+            // Field extraction
+            var fieldPrompt = $@"
+Extract the following fields from this property document:
+- buyerName
+- sellerName
+- closingDate
+- policyDate
+- summary (1-2 lines max)
+
+Return the response as a JSON object with keys: buyerName, sellerName, closingDate, policyDate, summary.
+
+Text:
+"""
+{text}
+"""";
+
+            var fieldOptions = new ChatCompletionsOptions
+            {
+                DeploymentName = "gpt-35-turbo",
+                Temperature = 0.2
+            };
+            fieldOptions.Messages.Add(new ChatMessage(ChatRole.System, "You are an intelligent document extraction assistant."));
+            fieldOptions.Messages.Add(new ChatMessage(ChatRole.User, fieldPrompt));
+
+            var fieldResponse = await openAiClient.GetChatCompletionsAsync(fieldOptions);
+            var fieldContent = fieldResponse.Value.Choices[0].Message.Content;
+
+            Dictionary<string, object> extractedFields = new();
+
+            try
+            {
+                extractedFields = JsonConvert.DeserializeObject<Dictionary<string, object>>(fieldContent);
+            }
+            catch (JsonException ex)
+            {
+                log.LogError($"Failed to parse OpenAI field extraction response: {ex.Message}");
+            }
+
+            // Document type classification
+            var typePrompt = $@"
+Classify the type of the following title-related document. The possible categories are: Commitment, Deed, Policy, Chain of Title, Exceptions, Closing Disclosure, or Unknown.
+Only respond with the document type.
+
+Document Text:
+"""
+{text}
+"""
+
+Document Type:";
+
+            var typeOptions = new ChatCompletionsOptions
+            {
+                DeploymentName = "gpt-35-turbo",
+                Temperature = 0
+            };
+            typeOptions.Messages.Add(new ChatMessage(ChatRole.System, "You are an AI assistant that classifies title insurance documents into specific categories."));
+            typeOptions.Messages.Add(new ChatMessage(ChatRole.User, typePrompt));
+
+            var typeResponse = await openAiClient.GetChatCompletionsAsync(typeOptions);
+            var documentType = typeResponse.Value.Choices[0].Message.Content?.Trim();
+
+            var cleanedFields = PostProcessFields(extractedFields, log);
+            cleanedFields["documentType"] = documentType;
+            cleanedFields["processId"] = processId;
+            cleanedFields["groupType"] = groupType;
+            cleanedFields["blobUrl"] = blobPath;
+
+            response.Values.Add(new WebApiSkillResponseRecord
+            {
+                RecordId = record.RecordId,
+                Data = cleanedFields
+            });
+        }
+
+        return new OkObjectResult(response);
+    }
+
+    private static string MatchOrNull(string input, string pattern, int group = 1)
+    {
+        var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups[group].Value.Trim() : null;
+    }
+
+    private static Dictionary<string, object> PostProcessFields(Dictionary<string, object> data, ILogger log)
+    {
+        var cleaned = new Dictionary<string, object>();
+
+        foreach (var kv in data)
+        {
+            string key = kv.Key;
+            string val = kv.Value?.ToString()?.Trim().TrimEnd('.', ',') ?? "";
+
+            if (string.IsNullOrWhiteSpace(val))
+            {
+                cleaned[key] = null;
+                continue;
+            }
+
+            switch (key.ToLower())
+            {
+                case "closingdate":
+                case "policydate":
+                    if (DateTime.TryParse(val, out var parsedDate))
+                        cleaned[key] = parsedDate.ToString("yyyy-MM-dd");
+                    else
+                        cleaned[key] = val;
+                    break;
+
+                case "documenttype":
+                case "category":
+                    cleaned[key] = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(val.ToLowerInvariant());
+                    break;
+
+                case "summary":
+                    cleaned[key] = val.Length > 300 ? val.Substring(0, 300) + "..." : val;
+                    break;
+
+                default:
+                    cleaned[key] = val;
+                    break;
+            }
+        }
+
+        return cleaned;
+    }
+
+    public class WebApiSkillRequest
+    {
+        public List<WebApiSkillRequestRecord> Values { get; set; }
+    }
+
+    public class WebApiSkillRequestRecord
+    {
+        public string RecordId { get; set; }
+        public Dictionary<string, string> Data { get; set; }
+    }
+
+    public class WebApiSkillResponse
+    {
+        public List<WebApiSkillResponseRecord> Values { get; set; }
+    }
+
+    public class WebApiSkillResponseRecord
+    {
+        public string RecordId { get; set; }
+        public Dictionary<string, object> Data { get; set; }
+    }
+}
