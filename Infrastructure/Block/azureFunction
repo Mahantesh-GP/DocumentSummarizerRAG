@@ -134,7 +134,7 @@ Document Type:";
         return match.Success ? match.Groups[group].Value.Trim() : null;
     }
 
-    private static Dictionary<string, object> PostProcessFields(Dictionary<string, object> data, ILogger log)
+   private static Dictionary<string, object> PostProcessFields(Dictionary<string, object> data, ILogger log)
     {
         var cleaned = new Dictionary<string, object>();
 
@@ -176,7 +176,6 @@ Document Type:";
 
         return cleaned;
     }
-
     public class WebApiSkillRequest
     {
         public List<WebApiSkillRequestRecord> Values { get; set; }
