@@ -1,0 +1,27 @@
+[ApiController]
+[Route("api/[controller]")]
+public class DocumentController : ControllerBase
+{
+    private readonly BlobStorageService _blobService;
+    private readonly AzureSearchService _searchService;
+
+    public DocumentController(BlobStorageService blobService, AzureSearchService searchService)
+    {
+        _blobService = blobService;
+        _searchService = searchService;
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> Delete([FromQuery] string blobUrl)
+    {
+        await _blobService.DeleteBlobAsync(blobUrl);
+        return NoContent();
+    }
+
+    [HttpPost("status")]
+    public async Task<IActionResult> UpdateStatus([FromBody] DocumentStatusRequest request)
+    {
+        await _searchService.UpdateStatusAsync(request);
+        return Ok();
+    }
+}
