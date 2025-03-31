@@ -352,3 +352,13 @@ private static async Task<string> ClassifyGroupType(string text, ILogger log)
     { "sourceFieldName": "/document/contentVector", "targetFieldName": "contentVector" }
   ]
 }
+
+
+cleanedFields["policyNumber"] = extractedFields.TryGetValue("policyNumber", out var pn) ? pn : null;
+cleanedFields["orderNumber"] = extractedFields.TryGetValue("orderNumber", out var on) ? on : null;
+cleanedFields["propertyAddress"] = extractedFields.TryGetValue("propertyAddress", out var pa) ? pa : null;
+cleanedFields["closingDate"] = extractedFields.TryGetValue("closingDate", out var cd) ? cd : null;
+cleanedFields["borrowerName"] = extractedFields.TryGetValue("borrowerName", out var bn) ? bn : null;
+cleanedFields["sellerName"] = extractedFields.TryGetValue("sellerName", out var sn) ? sn : null;
+cleanedFields["buyerName"] = extractedFields.TryGetValue("buyerName", out var byn) ? byn : null;
+cleanedFields["policyDate"] = extractedFields.TryGetValue("policyDate", out var pd) ? pd : null;
