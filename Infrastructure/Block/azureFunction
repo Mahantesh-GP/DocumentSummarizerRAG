@@ -26,7 +26,16 @@ public static class ExtractAndTagFields
         string limitedText = fullText.Length > 3000 ? fullText[..3000] : fullText;
 
         var extractedFields = await ExtractFieldsUsingOpenAI(limitedText, log);
+        string documentType = await ClassifyDocumentType(limitedText, log);
+        string groupType = await ClassifyGroupType(limitedText, log);
+        string blobPath = data?["metadata_storage_path"]?.ToString();
+        string containerName = !string.IsNullOrWhiteSpace(blobPath) ? new Uri(blobPath).Segments[1].TrimEnd('/') : null;
+
         var cleanedFields = PostProcessFields(extractedFields, log, fullText);
+        cleanedFields["documentType"] = documentType;
+        cleanedFields["groupType"] = groupType;
+        cleanedFields["blobUrl"] = blobPath;
+        cleanedFields["containerName"] = containerName;
 
         var response = new
         {
@@ -71,7 +80,62 @@ public static class ExtractAndTagFields
             log.LogWarning($"OpenAI call failed: {ex.Message}");
             return new();
         }
+        private static async Task<string> ClassifyDocumentType(string text, ILogger log)
+    {
+        var client = new OpenAIClient(new Uri(Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")),
+            new AzureKeyCredential(Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY")));
+
+        var chat = new ChatCompletionsOptions()
+        {
+            Messages =
+            {
+                new ChatMessage(ChatRole.System, "Classify the document as one of: Policy, Mortgage, Sale Deed, Commitment Package, Closing Disclosure, or Other. Return only the type."),
+                new ChatMessage(ChatRole.User, text)
+            },
+            Temperature = 0.2f,
+            MaxTokens = 20
+        };
+
+        try
+        {
+            var result = await client.GetChatCompletionsAsync("gpt-35-turbo", chat);
+            return result.Value.Choices[0].Message.Content?.Trim();
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning($"DocumentType classification failed: {ex.Message}");
+            return "Unknown";
+        }
     }
+
+    private static async Task<string> ClassifyGroupType(string text, ILogger log)
+    {
+        var client = new OpenAIClient(new Uri(Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")),
+            new AzureKeyCredential(Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY")));
+
+        var chat = new ChatCompletionsOptions()
+        {
+            Messages =
+            {
+                new ChatMessage(ChatRole.System, "Based on the document content, classify its group as: TitlePackage, ClosingPackage, or Misc. Return only the group name."),
+                new ChatMessage(ChatRole.User, text)
+            },
+            Temperature = 0.2f,
+            MaxTokens = 20
+        };
+
+        try
+        {
+            var result = await client.GetChatCompletionsAsync("gpt-35-turbo", chat);
+            return result.Value.Choices[0].Message.Content?.Trim();
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning($"GroupType classification failed: {ex.Message}");
+            return "Misc";
+        }
+    }
+
 
     private static Dictionary<string, object> PostProcessFields(Dictionary<string, object> extracted, ILogger log, string rawText)
     {
@@ -103,5 +167,70 @@ public static class ExtractAndTagFields
     {
         var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase);
         return match.Success ? match.Groups[1].Value.Trim() : null;
+    }
+}
+
+
+var extractedFields = await ExtractFieldsUsingOpenAI(combinedText, log);
+string documentType = await ClassifyDocumentType(combinedText, log);
+string groupType = await ClassifyGroupType(combinedText, log);
+
+var cleanedFields = PostProcessFields(extractedFields, log, fullText);
+cleanedFields["documentType"] = documentType;
+cleanedFields["groupType"] = groupType;
+
+private static async Task<string> ClassifyDocumentType(string text, ILogger log)
+{
+    var client = new OpenAIClient(new Uri(Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")),
+        new AzureKeyCredential(Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY")));
+
+    var chat = new ChatCompletionsOptions()
+    {
+        Messages =
+        {
+            new ChatMessage(ChatRole.System, "Classify the document as one of: Policy, Mortgage, Sale Deed, Commitment Package, Closing Disclosure, or Other. Return only the type as a single word."),
+            new ChatMessage(ChatRole.User, text)
+        },
+        Temperature = 0.2f,
+        MaxTokens = 20
+    };
+
+    try
+    {
+        var result = await client.GetChatCompletionsAsync("gpt-35-turbo", chat);
+        return result.Value.Choices[0].Message.Content?.Trim();
+    }
+    catch (Exception ex)
+    {
+        log.LogWarning($"DocumentType classification failed: {ex.Message}");
+        return "Unknown";
+    }
+}
+
+private static async Task<string> ClassifyGroupType(string text, ILogger log)
+{
+    var client = new OpenAIClient(new Uri(Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")),
+        new AzureKeyCredential(Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY")));
+
+    var chat = new ChatCompletionsOptions()
+    {
+        Messages =
+        {
+            new ChatMessage(ChatRole.System, "Based on the document content, classify its group as: TitlePackage, ClosingPackage, or Misc. Return only the group name."),
+            new ChatMessage(ChatRole.User, text)
+        },
+        Temperature = 0.2f,
+        MaxTokens = 20
+    };
+
+    try
+    {
+        var result = await client.GetChatCompletionsAsync("gpt-35-turbo", chat);
+        return result.Value.Choices[0].Message.Content?.Trim();
+    }
+    catch (Exception ex)
+    {
+        log.LogWarning($"GroupType classification failed: {ex.Message}");
+        return "Misc";
     }
 }
