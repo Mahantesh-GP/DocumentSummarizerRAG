@@ -40,47 +40,33 @@ public static class ExtractAndTagFieldsFunction
 
             string processId = MatchOrNull(text, @"(Order|File|Commitment|Loan)[^\w\n]*([\w-]+)", 2) ?? Guid.NewGuid().ToString();
 
-            string groupPrompt = $@"Based on the document content, classify it into one of the following group types:
-TitleExpress, ChainOfTitle, E-Closing, CommercialExceptions, OwnerSearch, Unknown.
-
-Only return the group type name.
-
-Text:
-{text}";
-
-            var groupOptions = new ChatCompletionsOptions
+            var groupOptions = new ChatCompletionOptions
             {
-                DeploymentName = "gpt-35-turbo",
-                Temperature = 0
+                Messages =
+                {
+                    new ChatMessage(ChatRole.System, "You are an AI assistant that classifies title documents into predefined group types."),
+                    new ChatMessage(ChatRole.User, $"Based on the document content, classify it into one of the following group types:\nTitleExpress, ChainOfTitle, E-Closing, CommercialExceptions, OwnerSearch, Unknown.\n\nOnly return the group type name.\n\nText:\n{text}")
+                },
+                Temperature = 0f,
+                MaxTokens = 256
             };
-            groupOptions.Messages.Add(new ChatMessage(ChatRole.System, "You are an AI assistant that classifies title documents into predefined group types."));
-            groupOptions.Messages.Add(new ChatMessage(ChatRole.User, groupPrompt));
 
-            var groupResponse = await openAiClient.GetChatCompletionsAsync(groupOptions);
-            string groupType = groupResponse.Value.Choices[0].Message.Content?.Trim();
+            var groupResponse = await openAiClient.GetChatCompletionsAsync("gpt-35-turbo", groupOptions);
+            string groupType = groupResponse.Value.Choices[0].Content?.Trim();
 
-            string fieldPrompt = $@"Extract the following fields from this property document:
-- buyerName
-- sellerName
-- closingDate
-- policyDate
-- summary (1-2 lines max)
-
-Return the response as a JSON object with keys: buyerName, sellerName, closingDate, policyDate, summary.
-
-Text:
-{text}";
-
-            var fieldOptions = new ChatCompletionsOptions
+            var fieldOptions = new ChatCompletionOptions
             {
-                DeploymentName = "gpt-35-turbo",
-                Temperature = 0.2
+                Messages =
+                {
+                    new ChatMessage(ChatRole.System, "You are an intelligent document extraction assistant."),
+                    new ChatMessage(ChatRole.User, $"Extract the following fields from this property document:\n- buyerName\n- sellerName\n- closingDate\n- policyDate\n- summary (1-2 lines max)\n- borrowerName\n- orderNumber\n- policyNumber\n- propertyAddress\n\nReturn the response as a JSON object with keys: buyerName, sellerName, borrowerName, orderNumber, policyNumber, closingDate, policyDate, propertyAddress, summary.\n\nText:\n{text}")
+                },
+                Temperature = 0.2f,
+                MaxTokens = 1024
             };
-            fieldOptions.Messages.Add(new ChatMessage(ChatRole.System, "You are an intelligent document extraction assistant."));
-            fieldOptions.Messages.Add(new ChatMessage(ChatRole.User, fieldPrompt));
 
-            var fieldResponse = await openAiClient.GetChatCompletionsAsync(fieldOptions);
-            var fieldContent = fieldResponse.Value.Choices[0].Message.Content;
+            var fieldResponse = await openAiClient.GetChatCompletionsAsync("gpt-35-turbo", fieldOptions);
+            var fieldContent = fieldResponse.Value.Choices[0].Content;
 
             Dictionary<string, object> extractedFields = new();
 
@@ -93,30 +79,60 @@ Text:
                 log.LogError($"Failed to parse OpenAI field extraction response: {ex.Message}");
             }
 
-            string typePrompt = $@"Classify the type of the following title-related document. The possible categories are: Commitment, Deed, Policy, Chain of Title, Exceptions, Closing Disclosure, or Unknown.
-Only respond with the document type.
-
-Document Text:
-{text}
-
-Document Type:";
-
-            var typeOptions = new ChatCompletionsOptions
+            var typeOptions = new ChatCompletionOptions
             {
-                DeploymentName = "gpt-35-turbo",
-                Temperature = 0
+                Messages =
+                {
+                    new ChatMessage(ChatRole.System, "You are an AI assistant that classifies title insurance documents into specific categories."),
+                    new ChatMessage(ChatRole.User, $"Classify the type of the following title-related document. The possible categories are: Commitment, Deed, Policy, Chain of Title, Exceptions, Closing Disclosure, or Unknown.\nOnly respond with the document type.\n\nDocument Text:\n{text}\n\nDocument Type:")
+                },
+                Temperature = 0f,
+                MaxTokens = 128
             };
-            typeOptions.Messages.Add(new ChatMessage(ChatRole.System, "You are an AI assistant that classifies title insurance documents into specific categories."));
-            typeOptions.Messages.Add(new ChatMessage(ChatRole.User, typePrompt));
 
-            var typeResponse = await openAiClient.GetChatCompletionsAsync(typeOptions);
-            var documentType = typeResponse.Value.Choices[0].Message.Content?.Trim();
+            var typeResponse = await openAiClient.GetChatCompletionsAsync("gpt-35-turbo", typeOptions);
+            var documentType = typeResponse.Value.Choices[0].Content?.Trim();
 
-            var cleanedFields = PostProcessFields(extractedFields, log);
+            var cleanedFields = PostProcessFields(extractedFields, log, text);
             cleanedFields["documentType"] = documentType;
             cleanedFields["processId"] = processId;
             cleanedFields["groupType"] = groupType;
             cleanedFields["blobUrl"] = blobPath;
+
+            // Detect low-quality OCR text
+            bool isLowQuality = string.IsNullOrWhiteSpace(text) || text.Length < 100;
+            cleanedFields["isLowQuality"] = isLowQuality;
+
+            // Optionally move low-quality blob to 'manual-review' container
+            if (isLowQuality && Uri.TryCreate(blobPath, UriKind.Absolute, out var blobUri))
+            {
+                try
+                {
+                    string containerName = blobUri.Segments[1].TrimEnd('/');
+                    string blobName = string.Join("", blobUri.Segments.Skip(2));
+                    string accountName = "<your-storage-account-name>";
+                    string sasToken = "<your-sas-token>"; // or use default credentials if running in Azure
+
+                    var blobServiceClient = new Azure.Storage.Blobs.BlobServiceClient(
+                        new Uri($"https://{accountName}.blob.core.windows.net"),
+                        new Azure.Storage.AzureSasCredential(sasToken)
+                    );
+
+                    var sourceContainer = blobServiceClient.GetBlobContainerClient(containerName);
+                    var targetContainer = blobServiceClient.GetBlobContainerClient("manual-review");
+                    await targetContainer.CreateIfNotExistsAsync();
+
+                    var sourceBlob = sourceContainer.GetBlobClient(blobName);
+                    var targetBlob = targetContainer.GetBlobClient($"{containerName}/{blobName}");
+
+                    await targetBlob.StartCopyFromUriAsync(sourceBlob.Uri);
+                    await sourceBlob.DeleteIfExistsAsync();
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning($"Blob relocation failed: {ex.Message}");
+                }
+            }
 
             response.Values.Add(new WebApiSkillResponseRecord
             {
@@ -134,7 +150,7 @@ Document Type:";
         return match.Success ? match.Groups[group].Value.Trim() : null;
     }
 
-   private static Dictionary<string, object> PostProcessFields(Dictionary<string, object> data, ILogger log)
+    private static Dictionary<string, object> PostProcessFields(Dictionary<string, object> data, ILogger log, string rawText = null)
     {
         var cleaned = new Dictionary<string, object>();
 
@@ -174,8 +190,36 @@ Document Type:";
             }
         }
 
+        // Regex fallback for critical fields if missing and rawText is available
+        if (!string.IsNullOrWhiteSpace(rawText))
+        {
+            if (!cleaned.ContainsKey("policyNumber") || cleaned["policyNumber"] == null)
+                cleaned["policyNumber"] = MatchOrNull(rawText, "Policy\s*Number[:\-\s]*([\w\-/]+)");
+
+            if (!cleaned.ContainsKey("orderNumber") || cleaned["orderNumber"] == null)
+                cleaned["orderNumber"] = MatchOrNull(rawText, "Order\s*Number[:\-\s]*([\w\-/]+)");
+
+            if (!cleaned.ContainsKey("propertyAddress") || cleaned["propertyAddress"] == null)
+                cleaned["propertyAddress"] = MatchOrNull(rawText, "Property\s*Address[:\-\s]*(.+?)(\n|$)");
+
+            if (!cleaned.ContainsKey("borrowerName") || cleaned["borrowerName"] == null)
+                cleaned["borrowerName"] = MatchOrNull(rawText, "Borrower[:\-\s]*(.+?)(\n|$)");
+
+            if (!cleaned.ContainsKey("closingDate") || cleaned["closingDate"] == null)
+                cleaned["closingDate"] = MatchOrNull(rawText, "Closing\s*Date[:\-\s]*([\d]{2}/[\d]{2}/[\d]{4})");
+
+            if (!cleaned.ContainsKey("policyDate") || cleaned["policyDate"] == null)
+                cleaned["policyDate"] = MatchOrNull(rawText, "Policy\s*Date[:\-\s]*([\d]{2}/[\d]{2}/[\d]{4})");
+
+            if (!cleaned.ContainsKey("buyerName") || cleaned["buyerName"] == null)
+                cleaned["buyerName"] = MatchOrNull(rawText, "Buyer[:\-\s]*(.+?)(\n|$)");
+
+            if (!cleaned.ContainsKey("sellerName") || cleaned["sellerName"] == null)
+                cleaned["sellerName"] = MatchOrNull(rawText, "Seller[:\-\s]*(.+?)(\n|$)");
+        }
         return cleaned;
     }
+
     public class WebApiSkillRequest
     {
         public List<WebApiSkillRequestRecord> Values { get; set; }
