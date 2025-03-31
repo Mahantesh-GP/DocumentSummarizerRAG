@@ -1,19 +1,14 @@
+using System.Text.RegularExpressions;
+using Azure;
+using Azure.AI.OpenAI;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using Azure;
-using Azure.AI.OpenAI;
-using System;
-using System.Globalization;
+using Newtonsoft.Json.Linq;
+using System.Net.Http;
 
-public static class ExtractAndTagFieldsFunction
+public static class ExtractAndTagFields
 {
     [FunctionName("ExtractAndTagFields")]
     public static async Task<IActionResult> Run(
@@ -21,224 +16,92 @@ public static class ExtractAndTagFieldsFunction
         ILogger log)
     {
         string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-        var input = JsonConvert.DeserializeObject<WebApiSkillRequest>(requestBody);
+        var input = JObject.Parse(requestBody);
+        var record = input["values"]?[0];
+        string recordId = record?["recordId"]?.ToString();
 
-        var response = new WebApiSkillResponse
+        var data = record?["data"] as JObject;
+        var chunks = data?["chunks"]?.ToObject<List<string>>() ?? new List<string>();
+        string fullText = string.Join("\n\n", chunks);
+        string limitedText = fullText.Length > 3000 ? fullText[..3000] : fullText;
+
+        var extractedFields = await ExtractFieldsUsingOpenAI(limitedText, log);
+        var cleanedFields = PostProcessFields(extractedFields, log, fullText);
+
+        var response = new
         {
-            Values = new List<WebApiSkillResponseRecord>()
+            values = new[]
+            {
+                new
+                {
+                    recordId = recordId,
+                    data = cleanedFields
+                }
+            }
         };
-
-        var openAiClient = new OpenAIClient(
-            new Uri("https://<your-openai-resource>.openai.azure.com/"),
-            new AzureKeyCredential("<your-openai-api-key>")
-        );
-
-        foreach (var record in input.Values)
-        {
-            string text = record.Data.ContainsKey("text") ? record.Data["text"] : string.Empty;
-            string blobPath = record.Data.ContainsKey("metadata_storage_path") ? record.Data["metadata_storage_path"] : string.Empty;
-
-            string processId = MatchOrNull(text, @"(Order|File|Commitment|Loan)[^\w\n]*([\w-]+)", 2) ?? Guid.NewGuid().ToString();
-
-            var groupOptions = new ChatCompletionOptions
-            {
-                Messages =
-                {
-                    new ChatMessage(ChatRole.System, "You are an AI assistant that classifies title documents into predefined group types."),
-                    new ChatMessage(ChatRole.User, $"Based on the document content, classify it into one of the following group types:\nTitleExpress, ChainOfTitle, E-Closing, CommercialExceptions, OwnerSearch, Unknown.\n\nOnly return the group type name.\n\nText:\n{text}")
-                },
-                Temperature = 0f,
-                MaxTokens = 256
-            };
-
-            var groupResponse = await openAiClient.GetChatCompletionsAsync("gpt-35-turbo", groupOptions);
-            string groupType = groupResponse.Value.Choices[0].Content?.Trim();
-
-            var fieldOptions = new ChatCompletionOptions
-            {
-                Messages =
-                {
-                    new ChatMessage(ChatRole.System, "You are an intelligent document extraction assistant."),
-                    new ChatMessage(ChatRole.User, $"Extract the following fields from this property document:\n- buyerName\n- sellerName\n- closingDate\n- policyDate\n- summary (1-2 lines max)\n- borrowerName\n- orderNumber\n- policyNumber\n- propertyAddress\n\nReturn the response as a JSON object with keys: buyerName, sellerName, borrowerName, orderNumber, policyNumber, closingDate, policyDate, propertyAddress, summary.\n\nText:\n{text}")
-                },
-                Temperature = 0.2f,
-                MaxTokens = 1024
-            };
-
-            var fieldResponse = await openAiClient.GetChatCompletionsAsync("gpt-35-turbo", fieldOptions);
-            var fieldContent = fieldResponse.Value.Choices[0].Content;
-
-            Dictionary<string, object> extractedFields = new();
-
-            try
-            {
-                extractedFields = JsonConvert.DeserializeObject<Dictionary<string, object>>(fieldContent);
-            }
-            catch (JsonException ex)
-            {
-                log.LogError($"Failed to parse OpenAI field extraction response: {ex.Message}");
-            }
-
-            var typeOptions = new ChatCompletionOptions
-            {
-                Messages =
-                {
-                    new ChatMessage(ChatRole.System, "You are an AI assistant that classifies title insurance documents into specific categories."),
-                    new ChatMessage(ChatRole.User, $"Classify the type of the following title-related document. The possible categories are: Commitment, Deed, Policy, Chain of Title, Exceptions, Closing Disclosure, or Unknown.\nOnly respond with the document type.\n\nDocument Text:\n{text}\n\nDocument Type:")
-                },
-                Temperature = 0f,
-                MaxTokens = 128
-            };
-
-            var typeResponse = await openAiClient.GetChatCompletionsAsync("gpt-35-turbo", typeOptions);
-            var documentType = typeResponse.Value.Choices[0].Content?.Trim();
-
-            var cleanedFields = PostProcessFields(extractedFields, log, text);
-            cleanedFields["documentType"] = documentType;
-            cleanedFields["processId"] = processId;
-            cleanedFields["groupType"] = groupType;
-            cleanedFields["blobUrl"] = blobPath;
-
-            // Detect low-quality OCR text
-            bool isLowQuality = string.IsNullOrWhiteSpace(text) || text.Length < 100;
-            cleanedFields["isLowQuality"] = isLowQuality;
-
-            // Optionally move low-quality blob to 'manual-review' container
-            if (isLowQuality && Uri.TryCreate(blobPath, UriKind.Absolute, out var blobUri))
-            {
-                try
-                {
-                    string containerName = blobUri.Segments[1].TrimEnd('/');
-                    string blobName = string.Join("", blobUri.Segments.Skip(2));
-                    string accountName = "<your-storage-account-name>";
-                    string sasToken = "<your-sas-token>"; // or use default credentials if running in Azure
-
-                    var blobServiceClient = new Azure.Storage.Blobs.BlobServiceClient(
-                        new Uri($"https://{accountName}.blob.core.windows.net"),
-                        new Azure.Storage.AzureSasCredential(sasToken)
-                    );
-
-                    var sourceContainer = blobServiceClient.GetBlobContainerClient(containerName);
-                    var targetContainer = blobServiceClient.GetBlobContainerClient("manual-review");
-                    await targetContainer.CreateIfNotExistsAsync();
-
-                    var sourceBlob = sourceContainer.GetBlobClient(blobName);
-                    var targetBlob = targetContainer.GetBlobClient($"{containerName}/{blobName}");
-
-                    await targetBlob.StartCopyFromUriAsync(sourceBlob.Uri);
-                    await sourceBlob.DeleteIfExistsAsync();
-                }
-                catch (Exception ex)
-                {
-                    log.LogWarning($"Blob relocation failed: {ex.Message}");
-                }
-            }
-
-            response.Values.Add(new WebApiSkillResponseRecord
-            {
-                RecordId = record.RecordId,
-                Data = cleanedFields
-            });
-        }
 
         return new OkObjectResult(response);
     }
 
-    private static string MatchOrNull(string input, string pattern, int group = 1)
+    private static async Task<Dictionary<string, object>> ExtractFieldsUsingOpenAI(string text, ILogger log)
     {
-        var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups[group].Value.Trim() : null;
+        var client = new OpenAIClient(
+            new Uri(Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")),
+            new AzureKeyCredential(Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY")));
+
+        var chat = new ChatCompletionsOptions()
+        {
+            Messages =
+            {
+                new ChatMessage(ChatRole.System, "Extract the following fields if present: policyNumber, orderNumber, propertyAddress, closingDate, borrowerName, sellerName, buyerName, policyDate. Return only a JSON object with those keys."),
+                new ChatMessage(ChatRole.User, text)
+            },
+            Temperature = 0.3f,
+            MaxTokens = 512
+        };
+
+        try
+        {
+            var completion = await client.GetChatCompletionsAsync("gpt-35-turbo", chat);
+            var json = completion.Value.Choices[0].Message.Content;
+            return JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning($"OpenAI call failed: {ex.Message}");
+            return new();
+        }
     }
 
-    private static Dictionary<string, object> PostProcessFields(Dictionary<string, object> data, ILogger log, string rawText = null)
+    private static Dictionary<string, object> PostProcessFields(Dictionary<string, object> extracted, ILogger log, string rawText)
     {
         var cleaned = new Dictionary<string, object>();
 
-        foreach (var kv in data)
+        // Copy over extracted fields directly
+        foreach (var key in new[] { "policyNumber", "orderNumber", "propertyAddress", "closingDate", "borrowerName", "sellerName", "buyerName", "policyDate" })
         {
-            string key = kv.Key;
-            string val = kv.Value?.ToString()?.Trim().TrimEnd('.', ',') ?? "";
-
-            if (string.IsNullOrWhiteSpace(val))
-            {
-                cleaned[key] = null;
-                continue;
-            }
-
-            switch (key.ToLower())
-            {
-                case "closingdate":
-                case "policydate":
-                    if (DateTime.TryParse(val, out var parsedDate))
-                        cleaned[key] = parsedDate.ToString("yyyy-MM-dd");
-                    else
-                        cleaned[key] = val;
-                    break;
-
-                case "documenttype":
-                case "category":
-                    cleaned[key] = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(val.ToLowerInvariant());
-                    break;
-
-                case "summary":
-                    cleaned[key] = val.Length > 300 ? val.Substring(0, 300) + "..." : val;
-                    break;
-
-                default:
-                    cleaned[key] = val;
-                    break;
-            }
+            cleaned[key] = extracted.ContainsKey(key) ? extracted[key] : null;
         }
 
-        // Regex fallback for critical fields if missing and rawText is available
+        // Fallback regex
         if (!string.IsNullOrWhiteSpace(rawText))
         {
-            if (!cleaned.ContainsKey("policyNumber") || cleaned["policyNumber"] == null)
-                cleaned["policyNumber"] = MatchOrNull(rawText, "Policy\s*Number[:\-\s]*([\w\-/]+)");
-
-            if (!cleaned.ContainsKey("orderNumber") || cleaned["orderNumber"] == null)
-                cleaned["orderNumber"] = MatchOrNull(rawText, "Order\s*Number[:\-\s]*([\w\-/]+)");
-
-            if (!cleaned.ContainsKey("propertyAddress") || cleaned["propertyAddress"] == null)
-                cleaned["propertyAddress"] = MatchOrNull(rawText, "Property\s*Address[:\-\s]*(.+?)(\n|$)");
-
-            if (!cleaned.ContainsKey("borrowerName") || cleaned["borrowerName"] == null)
-                cleaned["borrowerName"] = MatchOrNull(rawText, "Borrower[:\-\s]*(.+?)(\n|$)");
-
-            if (!cleaned.ContainsKey("closingDate") || cleaned["closingDate"] == null)
-                cleaned["closingDate"] = MatchOrNull(rawText, "Closing\s*Date[:\-\s]*([\d]{2}/[\d]{2}/[\d]{4})");
-
-            if (!cleaned.ContainsKey("policyDate") || cleaned["policyDate"] == null)
-                cleaned["policyDate"] = MatchOrNull(rawText, "Policy\s*Date[:\-\s]*([\d]{2}/[\d]{2}/[\d]{4})");
-
-            if (!cleaned.ContainsKey("buyerName") || cleaned["buyerName"] == null)
-                cleaned["buyerName"] = MatchOrNull(rawText, "Buyer[:\-\s]*(.+?)(\n|$)");
-
-            if (!cleaned.ContainsKey("sellerName") || cleaned["sellerName"] == null)
-                cleaned["sellerName"] = MatchOrNull(rawText, "Seller[:\-\s]*(.+?)(\n|$)");
+            cleaned["policyNumber"] ??= MatchOrNull(rawText, "Policy\\s*Number[:\\-\\s]*([\\w\\-/]+)");
+            cleaned["orderNumber"] ??= MatchOrNull(rawText, "Order\\s*Number[:\\-\\s]*([\\w\\-/]+)");
+            cleaned["propertyAddress"] ??= MatchOrNull(rawText, "Property\\s*Address[:\\-\\s]*(.+?)(\\n|$)");
+            cleaned["borrowerName"] ??= MatchOrNull(rawText, "Borrower[:\\-\\s]*(.+?)(\\n|$)");
+            cleaned["buyerName"] ??= MatchOrNull(rawText, "Buyer[:\\-\\s]*(.+?)(\\n|$)");
+            cleaned["sellerName"] ??= MatchOrNull(rawText, "Seller[:\\-\\s]*(.+?)(\\n|$)");
+            cleaned["closingDate"] ??= MatchOrNull(rawText, "Closing\\s*Date[:\\-\\s]*([\\d]{2}/[\\d]{2}/[\\d]{4})");
+            cleaned["policyDate"] ??= MatchOrNull(rawText, "Policy\\s*Date[:\\-\\s]*([\\d]{2}/[\\d]{2}/[\\d]{4})");
         }
+
         return cleaned;
     }
 
-    public class WebApiSkillRequest
+    private static string MatchOrNull(string input, string pattern)
     {
-        public List<WebApiSkillRequestRecord> Values { get; set; }
-    }
-
-    public class WebApiSkillRequestRecord
-    {
-        public string RecordId { get; set; }
-        public Dictionary<string, string> Data { get; set; }
-    }
-
-    public class WebApiSkillResponse
-    {
-        public List<WebApiSkillResponseRecord> Values { get; set; }
-    }
-
-    public class WebApiSkillResponseRecord
-    {
-        public string RecordId { get; set; }
-        public Dictionary<string, object> Data { get; set; }
+        var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups[1].Value.Trim() : null;
     }
 }
