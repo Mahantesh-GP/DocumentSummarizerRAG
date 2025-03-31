@@ -268,3 +268,87 @@ private static async Task<string> ClassifyGroupType(string text, ILogger log)
   "httpMethod": "POST",
   "timeout": "PT30S"
 }
+
+
+{
+  "name": "document-index",
+  "fields": [
+    { "name": "id", "type": "Edm.String", "key": true, "searchable": false },
+    { "name": "content", "type": "Edm.String", "searchable": true },
+    { "name": "policyNumber", "type": "Edm.String", "searchable": true },
+    { "name": "orderNumber", "type": "Edm.String", "searchable": true },
+    { "name": "propertyAddress", "type": "Edm.String", "searchable": true },
+    { "name": "closingDate", "type": "Edm.String", "searchable": true },
+    { "name": "borrowerName", "type": "Edm.String", "searchable": true },
+    { "name": "sellerName", "type": "Edm.String", "searchable": true },
+    { "name": "buyerName", "type": "Edm.String", "searchable": true },
+    { "name": "policyDate", "type": "Edm.String", "searchable": true },
+    { "name": "documentType", "type": "Edm.String", "searchable": true, "facetable": true, "filterable": true },
+    { "name": "groupType", "type": "Edm.String", "searchable": true, "facetable": true, "filterable": true },
+    { "name": "blobUrl", "type": "Edm.String", "searchable": false },
+    { "name": "containerName", "type": "Edm.String", "searchable": false },
+    { "name": "summary", "type": "Edm.String", "searchable": true },
+    { "name": "contentVector", "type": "Collection(Edm.Single)", "searchable": true, "dimensions": 1536, "vectorSearchProfile": "default-vector-profile" }
+  ],
+  "vectorSearch": {
+    "algorithmConfigurations": [
+      {
+        "name": "default-config",
+        "kind": "hnsw",
+        "hnswParameters": {
+          "m": 4,
+          "efConstruction": 400,
+          "efSearch": 500,
+          "metric": "cosine"
+        }
+      }
+    ],
+    "profiles": [
+      {
+        "name": "default-vector-profile",
+        "algorithmConfiguration": "default-config"
+      }
+    ]
+  }
+}
+
+
+
+
+
+{
+  "name": "document-indexer",
+  "dataSourceName": "my-blob-datasource",
+  "targetIndexName": "document-index",
+  "skillsetName": "document-skillset",
+  "schedule": {
+    "interval": "PT4H",
+    "startTime": "2024-04-01T00:00:00Z"
+  },
+  "parameters": {
+    "configuration": {
+      "dataToExtract": "contentAndMetadata",
+      "imageAction": "generateNormalizedImages"
+    }
+  },
+  "fieldMappings": [
+    { "sourceFieldName": "metadata_storage_path", "targetFieldName": "id" }
+  ],
+  "outputFieldMappings": [
+    { "sourceFieldName": "/document/content", "targetFieldName": "content" },
+    { "sourceFieldName": "/document/policyNumber", "targetFieldName": "policyNumber" },
+    { "sourceFieldName": "/document/orderNumber", "targetFieldName": "orderNumber" },
+    { "sourceFieldName": "/document/propertyAddress", "targetFieldName": "propertyAddress" },
+    { "sourceFieldName": "/document/closingDate", "targetFieldName": "closingDate" },
+    { "sourceFieldName": "/document/borrowerName", "targetFieldName": "borrowerName" },
+    { "sourceFieldName": "/document/sellerName", "targetFieldName": "sellerName" },
+    { "sourceFieldName": "/document/buyerName", "targetFieldName": "buyerName" },
+    { "sourceFieldName": "/document/policyDate", "targetFieldName": "policyDate" },
+    { "sourceFieldName": "/document/documentType", "targetFieldName": "documentType" },
+    { "sourceFieldName": "/document/groupType", "targetFieldName": "groupType" },
+    { "sourceFieldName": "/document/blobUrl", "targetFieldName": "blobUrl" },
+    { "sourceFieldName": "/document/containerName", "targetFieldName": "containerName" },
+    { "sourceFieldName": "/document/summary", "targetFieldName": "summary" },
+    { "sourceFieldName": "/document/contentVector", "targetFieldName": "contentVector" }
+  ]
+}
