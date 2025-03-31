@@ -234,3 +234,37 @@ private static async Task<string> ClassifyGroupType(string text, ILogger log)
         return "Misc";
     }
 }
+
+{
+  "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
+  "name": "#customExtractFields",
+  "description": "Extract key fields from document",
+  "context": "/document",
+  "inputs": [
+    {
+      "name": "chunks",
+      "source": "/document/pages"
+    },
+    {
+      "name": "metadata_storage_path",
+      "source": "/document/metadata_storage_path"
+    }
+  ],
+  "outputs": [
+    { "name": "policyNumber", "targetName": "policyNumber" },
+    { "name": "orderNumber", "targetName": "orderNumber" },
+    { "name": "propertyAddress", "targetName": "propertyAddress" },
+    { "name": "closingDate", "targetName": "closingDate" },
+    { "name": "borrowerName", "targetName": "borrowerName" },
+    { "name": "sellerName", "targetName": "sellerName" },
+    { "name": "buyerName", "targetName": "buyerName" },
+    { "name": "policyDate", "targetName": "policyDate" },
+    { "name": "documentType", "targetName": "documentType" },
+    { "name": "groupType", "targetName": "groupType" },
+    { "name": "blobUrl", "targetName": "blobUrl" },
+    { "name": "containerName", "targetName": "containerName" }
+  ],
+  "uri": "https://<your-function-app>.azurewebsites.net/api/ExtractAndTagFields?code=<your-key>",
+  "httpMethod": "POST",
+  "timeout": "PT30S"
+}
