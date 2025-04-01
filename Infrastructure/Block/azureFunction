@@ -362,3 +362,8 @@ cleanedFields["borrowerName"] = extractedFields.TryGetValue("borrowerName", out 
 cleanedFields["sellerName"] = extractedFields.TryGetValue("sellerName", out var sn) ? sn : null;
 cleanedFields["buyerName"] = extractedFields.TryGetValue("buyerName", out var byn) ? byn : null;
 cleanedFields["policyDate"] = extractedFields.TryGetValue("policyDate", out var pd) ? pd : null;
+
+string text = data.TryGetValue("content", out var inputText) ? inputText.ToString() : string.Empty;
+string fullText = text;
+string limitedText = text.Length > 5000 ? text[..5000] : text;
+
