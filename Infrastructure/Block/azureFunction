@@ -461,3 +461,22 @@ result = await Task.Run(async () => await client.GetChatCompletionsAsync("gpt-35
     log.LogError("All retry attempts failed.");
     return new Dictionary<string, object>();
 }
+
+ { "sourceFieldName": "/document/policyNumber", "targetFieldName": "policyNumber" },
+  { "sourceFieldName": "/document/orderNumber", "targetFieldName": "orderNumber" },
+  { "sourceFieldName": "/document/propertyAddress", "targetFieldName": "propertyAddress" },
+  { "sourceFieldName": "/document/closingDate", "targetFieldName": "closingDate" },
+  { "sourceFieldName": "/document/borrowerName", "targetFieldName": "borrowerName" },
+  { "sourceFieldName": "/document/sellerName", "targetFieldName": "sellerName" },
+  { "sourceFieldName": "/document/buyerName", "targetFieldName": "buyerName" },
+  { "sourceFieldName": "/document/policyDate", "targetFieldName": "policyDate" },
+  { "sourceFieldName": "/document/documentType", "targetFieldName": "documentType" },
+  { "sourceFieldName": "/document/groupType", "targetFieldName": "groupType" },
+  { "sourceFieldName": "/document/blobUrl", "targetFieldName": "blobUrl" },
+  { "sourceFieldName": "/document/containerName", "targetFieldName": "containerName" },
+  { "sourceFieldName": "/document/summary", "targetFieldName": "summary" },
+  
+  { "sourceFieldName": "/document/metadata_storage_path", "targetFieldName": "chunk_id" },
+  { "sourceFieldName": "/document/parent_id", "targetFieldName": "parent_id" },
+  { "sourceFieldName": "/document/mergedText", "targetFieldName": "chunk" },
+  { "sourceFieldName": "/document/title", "targetFieldName": "title" }
