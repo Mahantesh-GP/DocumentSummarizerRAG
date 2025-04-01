@@ -400,3 +400,32 @@ private static bool ContainsImportantFields(Dictionary<string, object> fields)
     string[] keys = { "policyNumber", "orderNumber", "propertyAddress", "borrowerName", "sellerName", "buyerName", "policyDate", "closingDate" };
     return keys.Any(k => fields.ContainsKey(k) && fields[k] != null);
 }
+
+
+Those backticks (`\``) will break parsing.
+
+---
+
+## ✅ How to Fix It
+
+### ✅ Step 1: Clean the response before parsing
+
+```csharp
+string content = result.Value.Choices[0].Message.Content?.Trim();
+
+// Remove markdown/code block if present
+if (content.StartsWith("```"))
+{
+    int start = content.IndexOf("{");
+    int end = content.LastIndexOf("}");
+    if (start >= 0 && end > start)
+    {
+        content = content.Substring(start, end - start + 1);
+    }
+}
+
+// Optionally: Remove prefix text like “Here is the JSON:”
+if (content.Contains("{") && !content.TrimStart().StartsWith("{"))
+{
+    content = content.Substring(content.IndexOf("{"));
+}
