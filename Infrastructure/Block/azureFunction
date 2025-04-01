@@ -429,3 +429,34 @@ if (content.Contains("{") && !content.TrimStart().StartsWith("{"))
 {
     content = content.Substring(content.IndexOf("{"));
 }
+
+private static async Task<Dictionary<string, object>> SafeExtractFields(OpenAIClient client, ChatCompletionsOptions options, ILogger log)
+{
+    for (int attempt = 1; attempt <= 3; attempt++)
+    {
+        try
+        {
+            var result = await client.GetChatCompletionsAsync("gpt-35-turbo", options);
+            var json = result.Value.Choices[0].Message.Content;
+            return JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 429)
+        {
+            log.LogWarning($"Rate limit hit. Attempt {attempt}/3. Retrying in 60s...");
+            await Task.Delay(TimeSpan.FromSeconds(60));
+        }
+        catch (RequestFailedException ex) when (ex.Message.Contains("tokens"))
+        {
+            log.LogError("Token limit exceeded. Consider chunking or trimming input.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            log.LogError($"Unexpected error on attempt {attempt}: {ex.Message}");
+            throw;
+        }
+    }
+
+    log.LogError("All retry attempts failed.");
+    return new Dictionary<string, object>();
+}
