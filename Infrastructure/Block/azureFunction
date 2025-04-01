@@ -367,3 +367,36 @@ string text = data.TryGetValue("content", out var inputText) ? inputText.ToStrin
 string fullText = text;
 string limitedText = text.Length > 5000 ? text[..5000] : text;
 
+
+
+string mergedText = data?["text"]?.ToString() ?? string.Empty;
+var chunks = SplitIntoChunks(mergedText, 2000);
+
+Dictionary<string, object> extractedFields = null;
+string limitedText = string.Empty;
+
+foreach (var chunk in chunks)
+{
+    limitedText = chunk.Length > 3000 ? chunk[..3000] : chunk;
+    extractedFields = await ExtractFieldsUsingOpenAI(limitedText, log);
+    if (ContainsImportantFields(extractedFields)) break;
+}
+
+string fullText = mergedText;
+
+private static List<string> SplitIntoChunks(string text, int chunkSize)
+{
+    var chunks = new List<string>();
+    for (int i = 0; i < text.Length; i += chunkSize)
+    {
+        int length = Math.Min(chunkSize, text.Length - i);
+        chunks.Add(text.Substring(i, length));
+    }
+    return chunks;
+}
+
+private static bool ContainsImportantFields(Dictionary<string, object> fields)
+{
+    string[] keys = { "policyNumber", "orderNumber", "propertyAddress", "borrowerName", "sellerName", "buyerName", "policyDate", "closingDate" };
+    return keys.Any(k => fields.ContainsKey(k) && fields[k] != null);
+}
