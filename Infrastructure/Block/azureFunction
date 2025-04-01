@@ -456,7 +456,8 @@ private static async Task<Dictionary<string, object>> SafeExtractFields(OpenAICl
             throw;
         }
     }
-
+result = await Task.Run(async () => await client.GetChatCompletionsAsync("gpt-35-turbo", chat))
+                      .WaitAsync(TimeSpan.FromSeconds(20));
     log.LogError("All retry attempts failed.");
     return new Dictionary<string, object>();
 }
