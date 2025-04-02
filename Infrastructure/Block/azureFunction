@@ -496,3 +496,13 @@ private static string NormalizeAddress(string address)
 string rawAddress = extracted.ContainsKey("propertyAddress") ? extracted["propertyAddress"]?.ToString() ?? "" : "";
 string propertyKey = NormalizeAddress(rawAddress);
 cleaned["propertyKey"] = propertyKey;
+
+{
+  "name": "propertyKey",
+  "type": "Edm.String",
+  "searchable": true,
+  "filterable": true,
+  "facetable": true,
+  "retrievable": true
+}
+
