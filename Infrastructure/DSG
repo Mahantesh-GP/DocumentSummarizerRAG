@@ -149,3 +149,86 @@ public class DocumentStatusRequest
     public bool IsDeleted { get; set; }
 }
 
+
+using Azure;
+using Azure.AI.OpenAI;
+using Azure.Search.Documents;
+using Azure.Search.Documents.Indexes;
+using Azure.Search.Documents.Models;
+using Microsoft.AspNetCore.Mvc;
+
+[ApiController]
+[Route("api/[controller]")]
+public class HybridSearchController : ControllerBase
+{
+    private readonly IConfiguration _config;
+
+    public HybridSearchController(IConfiguration config)
+    {
+        _config = config;
+    }
+
+    [HttpPost("search")]
+    public async Task<IActionResult> SearchAsync([FromBody] SearchRequest request)
+    {
+        string searchEndpoint = _config["AZURE_SEARCH_ENDPOINT"];
+        string searchKey = _config["AZURE_SEARCH_KEY"];
+        string openAiEndpoint = _config["AZURE_OPENAI_ENDPOINT"];
+        string openAiKey = _config["AZURE_OPENAI_KEY"];
+
+        var searchClient = new SearchClient(new Uri(searchEndpoint), "document-index", new AzureKeyCredential(searchKey));
+
+        var embeddingVector = await GetEmbeddingAsync(request.Query, openAiEndpoint, openAiKey);
+
+        var options = new SearchOptions
+        {
+            Size = 20,
+            QueryType = SearchQueryType.Simple,
+            VectorSearch = new VectorSearch
+            {
+                Queries =
+                {
+                    new VectorQuery
+                    {
+                        Fields = { "contentVector" },
+                        Value = embeddingVector,
+                        KNearestNeighborsCount = 10
+                    }
+                }
+            }
+        };
+
+        var filters = new List<string>();
+        if (!string.IsNullOrEmpty(request.AppId))
+            filters.Add($"appId eq '{request.AppId}'");
+        if (!string.IsNullOrEmpty(request.PropertyKey))
+            filters.Add($"propertyKey eq '{request.PropertyKey}'");
+        if (!string.IsNullOrEmpty(request.DocumentType))
+            filters.Add($"documentType eq '{request.DocumentType}'");
+
+        if (filters.Any())
+            options.Filter = string.Join(" and ", filters);
+
+        var response = await searchClient.SearchAsync<SearchDocument>(request.Query, options);
+        var results = response.Value.GetResults().Select(r => r.Document);
+
+        return Ok(results);
+    }
+
+    private async Task<IReadOnlyList<float>> GetEmbeddingAsync(string query, string endpoint, string key)
+    {
+        var client = new OpenAIClient(new Uri(endpoint), new AzureKeyCredential(key));
+        var response = await client.GetEmbeddingsAsync("text-embedding-ada-002", new EmbeddingsOptions(query));
+        return response.Value.Data[0].Embedding;
+    }
+}
+
+public class SearchRequest
+{
+    public string Query { get; set; }
+    public string AppId { get; set; }
+    public string PropertyKey { get; set; }
+    public string DocumentType { get; set; }
+}
+
+
