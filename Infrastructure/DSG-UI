@@ -130,3 +130,83 @@
         public bool IsDeleted { get; set; }
     }
 }
+
+
+
+@page "/search"
+@inject HttpClient Http
+
+<h3>Document Search</h3>
+
+<div class="mb-3">
+    <input class="form-control" placeholder="Enter search query..." @bind="Query" />
+</div>
+<div class="mb-3">
+    <input class="form-control" placeholder="App ID (optional)" @bind="AppId" />
+</div>
+<div class="mb-3">
+    <input class="form-control" placeholder="Property Key (optional)" @bind="PropertyKey" />
+</div>
+<div class="mb-3">
+    <input class="form-control" placeholder="Document Type (optional)" @bind="DocumentType" />
+</div>
+<button class="btn btn-primary" @onclick="RunSearch">Search</button>
+
+@if (Results is not null)
+{
+    <h4 class="mt-4">Results:</h4>
+    @foreach (var result in Results)
+    {
+        <div class="card my-2 p-3">
+            <div><strong>Title:</strong> @result.Document["title"]</div>
+            <div><strong>Answer:</strong> @result.Answer?.Text</div>
+            <div><strong>Highlights:</strong> @string.Join(", ", result.Highlights?.Values ?? new List<string>())</div>
+            <div><strong>Score:</strong> @result.RerankerScore</div>
+            <div><strong>Blob:</strong> <a href="@result.Document["blobUrl"]" target="_blank">Open Document</a></div>
+        </div>
+    }
+}
+
+@code {
+    public class SearchPayload
+    {
+        public string Query { get; set; }
+        public string AppId { get; set; }
+        public string PropertyKey { get; set; }
+        public string DocumentType { get; set; }
+        public string IndexName { get; set; } = "document-index";
+        public string SemanticConfiguration { get; set; } = "default";
+    }
+
+    public class SearchResult
+    {
+        public JsonElement Document { get; set; }
+        public JsonElement? Answer { get; set; }
+        public Dictionary<string, List<string>> Highlights { get; set; }
+        public double? RerankerScore { get; set; }
+    }
+
+    private string Query;
+    private string AppId;
+    private string PropertyKey;
+    private string DocumentType;
+    private List<SearchResult> Results;
+
+    private async Task RunSearch()
+    {
+        var payload = new SearchPayload
+        {
+            Query = Query,
+            AppId = AppId,
+            PropertyKey = PropertyKey,
+            DocumentType = DocumentType
+        };
+
+        var response = await Http.PostAsJsonAsync("api/HybridSearch/search", payload);
+        if (response.IsSuccessStatusCode)
+        {
+            Results = await response.Content.ReadFromJsonAsync<List<SearchResult>>();
+        }
+    }
+}
+
