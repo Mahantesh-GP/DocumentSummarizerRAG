@@ -176,12 +176,14 @@ public class HybridSearchController : ControllerBase
         string openAiEndpoint = _config["AZURE_OPENAI_ENDPOINT"];
         string openAiKey = _config["AZURE_OPENAI_KEY"];
 
-        var searchClient = new SearchClient(new Uri(searchEndpoint), "document-index", new AzureKeyCredential(searchKey));
+        var searchClient = new SearchClient(new Uri(searchEndpoint), request.IndexName, new AzureKeyCredential(searchKey));
 
         var embeddingVector = await GetEmbeddingAsync(request.Query, openAiEndpoint, openAiKey);
 
         var options = new SearchOptions
         {
+            QueryType = SearchQueryType.Semantic,
+            SemanticConfigurationName = request.SemanticConfiguration,
             Size = 20,
             QueryType = SearchQueryType.Simple,
             VectorSearch = new VectorSearch
@@ -229,6 +231,32 @@ public class SearchRequest
     public string AppId { get; set; }
     public string PropertyKey { get; set; }
     public string DocumentType { get; set; }
+    public string IndexName { get; set; } = "document-index";
+    public string SemanticConfiguration { get; set; } = "default";
+}
+    public string AppId { get; set; }
+    public string PropertyKey { get; set; }
+    public string DocumentType { get; set; }
 }
 
 
+"semantic": {
+  "defaultConfiguration": "default",
+  "configurations": [
+    {
+      "name": "default",
+      "prioritizedFields": {
+        "titleField": {
+          "fieldName": "title"
+        },
+        "prioritizedContentFields": [
+          { "fieldName": "chunk" }
+        ],
+        "prioritizedKeywordsFields": [
+          { "fieldName": "documentType" },
+          { "fieldName": "groupType" }
+        ]
+      }
+    }
+  ]
+},
