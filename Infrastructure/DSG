@@ -184,6 +184,10 @@ public class HybridSearchController : ControllerBase
         {
             QueryType = SearchQueryType.Semantic,
             SemanticConfigurationName = request.SemanticConfiguration,
+            QueryAnswer = QueryAnswer.Extractive,
+            AnswersCount = 3,
+            QueryType = SearchQueryType.Semantic,
+            SemanticConfigurationName = request.SemanticConfiguration,
             Size = 20,
             QueryType = SearchQueryType.Simple,
             VectorSearch = new VectorSearch
@@ -212,7 +216,13 @@ public class HybridSearchController : ControllerBase
             options.Filter = string.Join(" and ", filters);
 
         var response = await searchClient.SearchAsync<SearchDocument>(request.Query, options);
-        var results = response.Value.GetResults().Select(r => r.Document);
+        var results = response.Value.GetResults().Select(r => new
+        {
+            Document = r.Document,
+            Highlights = r.Highlights,
+            RerankerScore = r.RerankerScore,
+            Answer = r.Answer
+        });
 
         return Ok(results);
     }
