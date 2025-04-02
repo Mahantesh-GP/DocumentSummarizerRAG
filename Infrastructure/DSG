@@ -83,4 +83,17 @@ public class SearchRequest
     public string DocumentType { get; set; }
     public string IndexName { get; set; } = "document-index";
     public string SemanticConfiguration { get; set; } = "default";
+
+
+
+var results = new List<DocumentRag>();
+
+await foreach (SearchResult<DocumentRag> result in response.GetResultsAsync())
+{
+    var doc = result.Document;
+    results.Add(doc);
+
+    // Log or inspect any field
+    Console.WriteLine($"Title: {doc.Title}, AppId: {doc.AppId}");
+}
 }
