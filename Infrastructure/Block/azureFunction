@@ -480,3 +480,19 @@ result = await Task.Run(async () => await client.GetChatCompletionsAsync("gpt-35
   { "sourceFieldName": "/document/parent_id", "targetFieldName": "parent_id" },
   { "sourceFieldName": "/document/mergedText", "targetFieldName": "chunk" },
   { "sourceFieldName": "/document/title", "targetFieldName": "title" }
+
+
+
+private static string NormalizeAddress(string address)
+{
+    if (string.IsNullOrWhiteSpace(address)) return null;
+    string lower = address.ToLowerInvariant();
+    string noPunctuation = Regex.Replace(lower, "[^a-z0-9\\s]", "");
+    string trimmed = Regex.Replace(noPunctuation, "\\s+", "-").Trim('-');
+    return trimmed;
+}
+
+// Normalize propertyAddress to create propertyKey
+string rawAddress = extracted.ContainsKey("propertyAddress") ? extracted["propertyAddress"]?.ToString() ?? "" : "";
+string propertyKey = NormalizeAddress(rawAddress);
+cleaned["propertyKey"] = propertyKey;
