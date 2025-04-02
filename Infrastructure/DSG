@@ -1,59 +1,6 @@
-[ApiController]
-[Route("api/[controller]")]
-public class SearchController : ControllerBase
-{
-    private readonly AzureSearchService _searchService;
-
-    public SearchController(AzureSearchService searchService)
-    {
-        _searchService = searchService;
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> Search([FromQuery] string query)
-    {
-        var results = await _searchService.HybridSearchAsync(query);
-        return Ok(results);
-    }
-}
-[ApiController]
-[Route("api/[controller]")]
-public class DocumentController : ControllerBase
-{
-    private readonly BlobStorageService _blobService;
-    private readonly AzureSearchService _searchService;
-
-    public DocumentController(BlobStorageService blobService, AzureSearchService searchService)
-    {
-        _blobService = blobService;
-        _searchService = searchService;
-    }
-
-    [HttpDelete]
-    public async Task<IActionResult> Delete([FromQuery] string blobUrl)
-    {
-        await _blobService.DeleteBlobAsync(blobUrl);
-        return NoContent();
-    }
-
-    [HttpPost("status")]
-    public async Task<IActionResult> UpdateStatus([FromBody] DocumentStatusRequest request)
-    {
-        await _searchService.UpdateStatusAsync(request);
-        return Ok();
-    }
-}
-
-public class DocumentStatusRequest
-{
-    public string BlobUrl { get; set; }
-    public bool IsReviewed { get; set; }
-    public bool IsDeleted { get; set; }
-}
-
 using Azure;
+using Azure.AI.OpenAI;
 using Azure.Search.Documents;
-using Azure.Search.Documents.Indexes;
 using Azure.Search.Documents.Models;
 using Microsoft.Extensions.Configuration;
 
@@ -61,135 +8,31 @@ public class AzureSearchService
 {
     private readonly IConfiguration _config;
     private readonly SearchClient _searchClient;
+    private readonly OpenAIClient _openAiClient;
 
     public AzureSearchService(IConfiguration config)
     {
         _config = config;
-        var endpoint = new Uri(_config["AzureSearch:Endpoint"]);
-        var credential = new AzureKeyCredential(_config["AzureSearch:ApiKey"]);
-        _searchClient = new SearchClient(endpoint, _config["AzureSearch:IndexName"], credential);
+        _searchClient = new SearchClient(
+            new Uri(_config["AZURE_SEARCH_ENDPOINT"]!),
+            _config["DEFAULT_INDEX"] ?? "document-index",
+            new AzureKeyCredential(_config["AZURE_SEARCH_KEY"]!));
+
+        _openAiClient = new OpenAIClient(
+            new Uri(_config["AZURE_OPENAI_ENDPOINT"]!),
+            new AzureKeyCredential(_config["AZURE_OPENAI_KEY"]!));
     }
 
-    public async Task<List<RelatedDocGroup>> HybridSearchAsync(string query)
+    public async Task<IEnumerable<object>> RunHybridSearchAsync(SearchRequest request)
     {
-        var options = new SearchOptions { Size = 20 };
-        options.Select.Add("processId");
-        options.Select.Add("summary");
-        options.Select.Add("blobUrl");
-        options.Select.Add("documentType");
-        options.Select.Add("groupType");
-        options.Select.Add("isReviewed");
-        options.Select.Add("isDeleted");
-
-        var results = await _searchClient.SearchAsync<SearchDocument>(query, options);
-        var grouped = new Dictionary<string, RelatedDocGroup>();
-
-        await foreach (var item in results.Value.GetResultsAsync())
-        {
-            var doc = item.Document;
-            var processId = doc["processId"]?.ToString() ?? "unknown";
-
-            if (!grouped.ContainsKey(processId))
-            {
-                grouped[processId] = new RelatedDocGroup
-                {
-                    ProcessId = processId,
-                    Summary = doc["summary"]?.ToString(),
-                    Documents = new List<RelatedDoc>()
-                };
-            }
-
-            grouped[processId].Documents.Add(new RelatedDoc
-            {
-                Name = Path.GetFileName(doc["blobUrl"]?.ToString()),
-                Url = doc["blobUrl"]?.ToString(),
-                Type = doc["documentType"]?.ToString(),
-                IsReviewed = doc.ContainsKey("isReviewed") && (bool)doc["isReviewed"],
-                IsDeleted = doc.ContainsKey("isDeleted") && (bool)doc["isDeleted"]
-            });
-        }
-
-        return grouped.Values.ToList();
-    }
-
-    public async Task UpdateStatusAsync(DocumentStatusRequest request)
-    {
-        var patch = new Dictionary<string, object>
-        {
-            ["@search.action"] = "merge",
-            ["blobUrl"] = request.BlobUrl,
-            ["isReviewed"] = request.IsReviewed,
-            ["isDeleted"] = request.IsDeleted
-        };
-
-        await _searchClient.MergeOrUploadDocumentsAsync(new[] { patch });
-    }
-}
-
-public class RelatedDocGroup
-{
-    public string ProcessId { get; set; }
-    public string Summary { get; set; }
-    public List<RelatedDoc> Documents { get; set; }
-}
-
-public class RelatedDoc
-{
-    public string Name { get; set; }
-    public string Url { get; set; }
-    public string Type { get; set; }
-    public bool IsReviewed { get; set; }
-    public bool IsDeleted { get; set; }
-}
-
-public class DocumentStatusRequest
-{
-    public string BlobUrl { get; set; }
-    public bool IsReviewed { get; set; }
-    public bool IsDeleted { get; set; }
-}
-
-
-using Azure;
-using Azure.AI.OpenAI;
-using Azure.Search.Documents;
-using Azure.Search.Documents.Indexes;
-using Azure.Search.Documents.Models;
-using Microsoft.AspNetCore.Mvc;
-
-[ApiController]
-[Route("api/[controller]")]
-public class HybridSearchController : ControllerBase
-{
-    private readonly IConfiguration _config;
-
-    public HybridSearchController(IConfiguration config)
-    {
-        _config = config;
-    }
-
-    [HttpPost("search")]
-    public async Task<IActionResult> SearchAsync([FromBody] SearchRequest request)
-    {
-        string searchEndpoint = _config["AZURE_SEARCH_ENDPOINT"];
-        string searchKey = _config["AZURE_SEARCH_KEY"];
-        string openAiEndpoint = _config["AZURE_OPENAI_ENDPOINT"];
-        string openAiKey = _config["AZURE_OPENAI_KEY"];
-
-        var searchClient = new SearchClient(new Uri(searchEndpoint), request.IndexName, new AzureKeyCredential(searchKey));
-
-        var embeddingVector = await GetEmbeddingAsync(request.Query, openAiEndpoint, openAiKey);
+        var embedding = await GetEmbeddingAsync(request.Query);
 
         var options = new SearchOptions
         {
             QueryType = SearchQueryType.Semantic,
             SemanticConfigurationName = request.SemanticConfiguration,
-            QueryAnswer = QueryAnswer.Extractive,
-            AnswersCount = 3,
-            QueryType = SearchQueryType.Semantic,
-            SemanticConfigurationName = request.SemanticConfiguration,
+            QueryAnswer = QueryAnswer.Generative,
             Size = 20,
-            QueryType = SearchQueryType.Simple,
             VectorSearch = new VectorSearch
             {
                 Queries =
@@ -197,7 +40,7 @@ public class HybridSearchController : ControllerBase
                     new VectorQuery
                     {
                         Fields = { "contentVector" },
-                        Value = embeddingVector,
+                        Value = embedding,
                         KNearestNeighborsCount = 10
                     }
                 }
@@ -215,22 +58,19 @@ public class HybridSearchController : ControllerBase
         if (filters.Any())
             options.Filter = string.Join(" and ", filters);
 
-        var response = await searchClient.SearchAsync<SearchDocument>(request.Query, options);
-        var results = response.Value.GetResults().Select(r => new
+        var response = await _searchClient.SearchAsync<SearchDocument>(request.Query, options);
+        return response.Value.GetResults().Select(r => new
         {
             Document = r.Document,
             Highlights = r.Highlights,
             RerankerScore = r.RerankerScore,
             Answer = r.Answer
         });
-
-        return Ok(results);
     }
 
-    private async Task<IReadOnlyList<float>> GetEmbeddingAsync(string query, string endpoint, string key)
+    private async Task<IReadOnlyList<float>> GetEmbeddingAsync(string query)
     {
-        var client = new OpenAIClient(new Uri(endpoint), new AzureKeyCredential(key));
-        var response = await client.GetEmbeddingsAsync("text-embedding-ada-002", new EmbeddingsOptions(query));
+        var response = await _openAiClient.GetEmbeddingsAsync("text-embedding-ada-002", new EmbeddingsOptions(query));
         return response.Value.Data[0].Embedding;
     }
 }
@@ -244,29 +84,3 @@ public class SearchRequest
     public string IndexName { get; set; } = "document-index";
     public string SemanticConfiguration { get; set; } = "default";
 }
-    public string AppId { get; set; }
-    public string PropertyKey { get; set; }
-    public string DocumentType { get; set; }
-}
-
-
-"semantic": {
-  "defaultConfiguration": "default",
-  "configurations": [
-    {
-      "name": "default",
-      "prioritizedFields": {
-        "titleField": {
-          "fieldName": "title"
-        },
-        "prioritizedContentFields": [
-          { "fieldName": "chunk" }
-        ],
-        "prioritizedKeywordsFields": [
-          { "fieldName": "documentType" },
-          { "fieldName": "groupType" }
-        ]
-      }
-    }
-  ]
-},
