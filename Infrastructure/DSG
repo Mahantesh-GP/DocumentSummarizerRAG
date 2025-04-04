@@ -1,221 +1,140 @@
+
+//. Define a Table Entity (SoftDeleteEntry.cs)
 using Azure;
-using Azure.AI.OpenAI;
-using Azure.Search.Documents;
-using Azure.Search.Documents.Models;
-using Microsoft.Extensions.Configuration;
+using Azure.Data.Tables;
+using System;
 
-public class AzureSearchService
+public class SoftDeleteEntry : ITableEntity
 {
-    private readonly IConfiguration _config;
-    private readonly SearchClient _searchClient;
-    private readonly OpenAIClient _openAiClient;
+    public string PartitionKey { get; set; } // AppId
+    public string RowKey { get; set; }       // Unique document ID (e.g., blobPath or chunk_id)
 
-    public AzureSearchService(IConfiguration config)
-    {
-        _config = config;
-        _searchClient = new SearchClient(
-            new Uri(_config["AZURE_SEARCH_ENDPOINT"]!),
-            _config["DEFAULT_INDEX"] ?? "document-index",
-            new AzureKeyCredential(_config["AZURE_SEARCH_KEY"]!));
+    public DateTime DeletedOn { get; set; }
+    public string DeletedBy { get; set; }
 
-        _openAiClient = new OpenAIClient(
-            new Uri(_config["AZURE_OPENAI_ENDPOINT"]!),
-            new AzureKeyCredential(_config["AZURE_OPENAI_KEY"]!));
-    }
-
-    public async Task<IEnumerable<object>> RunHybridSearchAsync(SearchRequest request)
-    {
-        var embedding = await GetEmbeddingAsync(request.Query);
-
-        var options = new SearchOptions
-        {
-            QueryType = SearchQueryType.Semantic,
-            SemanticConfigurationName = request.SemanticConfiguration,
-            QueryAnswer = QueryAnswer.Generative,
-            Size = 20,
-            VectorSearch = new VectorSearch
-            {
-                Queries =
-                {
-                    new VectorQuery
-                    {
-                        Fields = { "contentVector" },
-                        Value = embedding,
-                        KNearestNeighborsCount = 10
-                    }
-                }
-            }
-        };
-
-        var filters = new List<string>();
-        if (!string.IsNullOrEmpty(request.AppId))
-            filters.Add($"appId eq '{request.AppId}'");
-        if (!string.IsNullOrEmpty(request.PropertyKey))
-            filters.Add($"propertyKey eq '{request.PropertyKey}'");
-        if (!string.IsNullOrEmpty(request.DocumentType))
-            filters.Add($"documentType eq '{request.DocumentType}'");
-
-        if (filters.Any())
-            options.Filter = string.Join(" and ", filters);
-
-        var response = await _searchClient.SearchAsync<SearchDocument>(request.Query, options);
-        return response.Value.GetResults().Select(r => new
-        {
-            Document = r.Document,
-            Highlights = r.Highlights,
-            RerankerScore = r.RerankerScore,
-            Answer = r.Answer
-        });
-    }
-
-    private async Task<IReadOnlyList<float>> GetEmbeddingAsync(string query)
-    {
-        var response = await _openAiClient.GetEmbeddingsAsync("text-embedding-ada-002", new EmbeddingsOptions(query));
-        return response.Value.Data[0].Embedding;
-    }
-}
-
-public class SearchRequest
-{
-    public string Query { get; set; }
-    public string AppId { get; set; }
-    public string PropertyKey { get; set; }
-    public string DocumentType { get; set; }
-    public string IndexName { get; set; } = "document-index";
-    public string SemanticConfiguration { get; set; } = "default";
-
-
-
-var results = new List<DocumentRag>();
-
-await foreach (SearchResult<DocumentRag> result in response.GetResultsAsync())
-{
-    var doc = result.Document;
-    results.Add(doc);
-
-    // Log or inspect any field
-    Console.WriteLine($"Title: {doc.Title}, AppId: {doc.AppId}");
-}
+    public ETag ETag { get; set; }
+    public DateTimeOffset? Timestamp { get; set; }
 }
 
 
-options.QueryType = SearchQueryType.Semantic;
-options.QueryLanguage = "en-us"; // Required for semantic
-options.SemanticConfigurationName = "<your-semantic-config-name>"; // Match your index config
-options.Answers = AnswersType.Extractive;
-options.Captions = CaptionsType.Extractive;
-options.HighlightPreTag = "<em>";
-options.HighlightPostTag = "</em>";
+// service
+private readonly TableClient _tableClient;
 
 
-var results = new List<SearchResult>();
-
-await foreach (var result in response.Value.GetResultsAsync())
+public DocumentController(IConfiguration config)
 {
-    var doc = result.Document;
+    var connectionString = config["AzureStorageConnection"];
+    _tableClient = new TableClient(connectionString, "SoftDeleteLog");
+    _tableClient.CreateIfNotExists();
+}
 
-    var answer = result.Answers?.FirstOrDefault()?.Text;
-    var caption = result.Captions?.FirstOrDefault()?.Text;
 
-    results.Add(new SearchResult
+///
+[HttpPost("soft-delete")]
+public async Task<IActionResult> SoftDeleteDocument([FromBody] SoftDeleteEntry request)
+{
+    request.DeletedOn = DateTime.UtcNow;
+    request.ETag = ETag.All;
+
+    await _tableClient.UpsertEntityAsync(request);
+    return Ok("Soft deleted successfully.");
+}
+
+
+////
+[HttpPost("search")]
+public async Task<IActionResult> Search([FromBody] SearchPayload payload)
+{
+    var deletedIds = _tableClient.Query<SoftDeleteEntry>(e => e.PartitionKey == payload.AppId)
+        .Select(e => e.RowKey)
+        .ToHashSet();
+
+    var searchResults = await _searchClient.SearchAsync<SearchDocument>(payload.Query, new SearchOptions
     {
-        Document = doc,
-        Highlights = result.Highlights,
-        RerankerScore = result.Score,
-        Answer = answer,
-        Caption = caption
+        SearchFields = { "chunk", "title", "policyNumber" },
+        Size = 20
     });
+
+    var filteredResults = searchResults.Value.GetResults()
+        .Where(r => !deletedIds.Contains(r.Document["chunk_id"]?.ToString()));
+
+    return Ok(filteredResults);
 }
 
-public class SearchResult
+
+//
+
+<button @onclick="() => ConfirmDelete(doc)" class="btn btn-sm btn-outline-danger">
+    <i class="bi bi-trash"></i>
+</button>
+
+
+private async Task ConfirmDelete(DocumentRag doc)
 {
-    public JsonElement Document { get; set; }
-    public IDictionary<string, IList<string>> Highlights { get; set; }
-    public string Answer { get; set; }
-    public string Caption { get; set; }
-    public double? RerankerScore { get; set; }
-}
-
-@page "/ai-assistant"
-@inject HttpClient Http
-
-<h1 class="text-2xl font-bold mb-4 text-gray-800">AI Assistant</h1>
-<p class="text-gray-600 mb-6">Ask questions like:</p>
-<ul class="list-disc list-inside text-sm text-gray-500 mb-6">
-    <li>"Show me all unreviewed policy documents for buyer John Doe in February 2023"</li>
-    <li>"Which documents were flagged low quality this week?"</li>
-    <li>"Summarize the commitment package for process ID 2021-105"</li>
-</ul>
-
-<div class="flex gap-3 mb-4">
-    <InputText class="w-full p-2 border border-gray-300 rounded-xl" @bind-Value="query" placeholder="Ask your document assistant..." />
-    <button class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow hover:bg-blue-700 transition" @onclick="HandleQuery">Ask</button>
-</div>
-
-@if (isLoading)
-{
-    <p class="text-gray-500 italic">Thinking...</p>
-}
-
-@if (!string.IsNullOrWhiteSpace(answer))
-{
-    <div class="bg-white p-4 rounded-lg shadow mb-6 border border-gray-100">
-        <h3 class="text-lg font-semibold text-gray-800 mb-2">Answer</h3>
-        <p class="text-gray-700 whitespace-pre-wrap">@answer</p>
-    </div>
-}
-
-@if (docs?.Any() == true)
-{
-    <h4 class="font-bold mb-2 text-gray-800">Matched Documents</h4>
-    @foreach (var doc in docs)
+    var payload = new SoftDeleteEntry
     {
-        <div class="bg-gray-50 border border-gray-200 rounded p-3 mb-3">
-            <div class="font-medium text-gray-900">@doc.Name</div>
-            <div class="text-sm text-gray-600">@doc.Type • Process: @doc.ProcessId</div>
-            <div class="text-xs text-gray-500 mt-1">@doc.Summary</div>
-            <div class="mt-2">
-                <a href="@doc.Url" target="_blank" class="text-blue-600 hover:underline text-sm">View PDF</a>
-            </div>
-        </div>
+        PartitionKey = doc.AppId,
+        RowKey = doc.DocumentId, // or blobPath/chunk_id
+        DeletedBy = "user@example.com"
+    };
+
+    var response = await Http.PostAsJsonAsync("api/documents/soft-delete", payload);
+
+    if (response.IsSuccessStatusCode)
+    {
+        await LoadSearchResults(); // refresh results
     }
 }
+
+//sodtdelete.razor
+
+<button @onclick="TriggerDelete" class="btn btn-sm btn-outline-danger" title="Delete">
+    <i class="bi bi-trash"></i>
+</button>
 
 @code {
-    private string query;
-    private string answer;
-    private bool isLoading;
-    private List<DocCard> docs;
+    [Parameter] public string AppId { get; set; }
+    [Parameter] public string DocumentId { get; set; }
+    [Parameter] public EventCallback OnDeleted { get; set; }
 
-    private async Task HandleQuery()
+    [Inject] public HttpClient Http { get; set; }
+
+    private async Task TriggerDelete()
     {
-        isLoading = true;
-        answer = string.Empty;
-        docs = null;
+        var payload = new SoftDeleteEntry
+        {
+            PartitionKey = AppId,
+            RowKey = DocumentId,
+            DeletedOn = DateTime.UtcNow,
+            DeletedBy = "user@example.com"
+        };
 
-        var payload = new { input = query };
-        var result = await Http.PostAsJsonAsync("api/ai/ask", payload);
-        var response = await result.Content.ReadFromJsonAsync<AIResponse>();
-
-        answer = response.Answer;
-        docs = response.Documents;
-
-        isLoading = false;
+        var response = await Http.PostAsJsonAsync("api/documents/soft-delete", payload);
+        if (response.IsSuccessStatusCode)
+        {
+            if (OnDeleted.HasDelegate)
+                await OnDeleted.InvokeAsync(null);
+        }
     }
+}
 
-    public class AIResponse
-    {
-        public string Answer { get; set; }
-        public List<DocCard> Documents { get; set; }
-    }
+public class SoftDeleteEntry
+{
+    public string PartitionKey { get; set; }  // AppId
+    public string RowKey { get; set; }        // DocumentId or blobPath
+    public DateTime DeletedOn { get; set; }
+    public string DeletedBy { get; set; }
+}
 
-    public class DocCard
-    {
-        public string Name { get; set; }
-        public string Url { get; set; }
-        public string Type { get; set; }
-        public string Summary { get; set; }
-        public string ProcessId { get; set; }
-    }
+
+@foreach (var doc in SearchResults)
+{
+    <div class="d-flex justify-content-between">
+        <div>
+            <h6>@doc.Document["title"]</h6>
+            <p>@doc.Document["chunk"]?.ToString()?.Substring(0, 150)...</p>
+        </div>
+        <SoftDeleteButton AppId="@doc.AppId" DocumentId="@doc.DocumentId" OnDeleted="ReloadResults" />
+    </div>
 }
 
