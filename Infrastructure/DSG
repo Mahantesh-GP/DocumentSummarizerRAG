@@ -135,3 +135,87 @@ public class SearchResult
     public string Caption { get; set; }
     public double? RerankerScore { get; set; }
 }
+
+@page "/ai-assistant"
+@inject HttpClient Http
+
+<h1 class="text-2xl font-bold mb-4 text-gray-800">AI Assistant</h1>
+<p class="text-gray-600 mb-6">Ask questions like:</p>
+<ul class="list-disc list-inside text-sm text-gray-500 mb-6">
+    <li>"Show me all unreviewed policy documents for buyer John Doe in February 2023"</li>
+    <li>"Which documents were flagged low quality this week?"</li>
+    <li>"Summarize the commitment package for process ID 2021-105"</li>
+</ul>
+
+<div class="flex gap-3 mb-4">
+    <InputText class="w-full p-2 border border-gray-300 rounded-xl" @bind-Value="query" placeholder="Ask your document assistant..." />
+    <button class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow hover:bg-blue-700 transition" @onclick="HandleQuery">Ask</button>
+</div>
+
+@if (isLoading)
+{
+    <p class="text-gray-500 italic">Thinking...</p>
+}
+
+@if (!string.IsNullOrWhiteSpace(answer))
+{
+    <div class="bg-white p-4 rounded-lg shadow mb-6 border border-gray-100">
+        <h3 class="text-lg font-semibold text-gray-800 mb-2">Answer</h3>
+        <p class="text-gray-700 whitespace-pre-wrap">@answer</p>
+    </div>
+}
+
+@if (docs?.Any() == true)
+{
+    <h4 class="font-bold mb-2 text-gray-800">Matched Documents</h4>
+    @foreach (var doc in docs)
+    {
+        <div class="bg-gray-50 border border-gray-200 rounded p-3 mb-3">
+            <div class="font-medium text-gray-900">@doc.Name</div>
+            <div class="text-sm text-gray-600">@doc.Type • Process: @doc.ProcessId</div>
+            <div class="text-xs text-gray-500 mt-1">@doc.Summary</div>
+            <div class="mt-2">
+                <a href="@doc.Url" target="_blank" class="text-blue-600 hover:underline text-sm">View PDF</a>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private string query;
+    private string answer;
+    private bool isLoading;
+    private List<DocCard> docs;
+
+    private async Task HandleQuery()
+    {
+        isLoading = true;
+        answer = string.Empty;
+        docs = null;
+
+        var payload = new { input = query };
+        var result = await Http.PostAsJsonAsync("api/ai/ask", payload);
+        var response = await result.Content.ReadFromJsonAsync<AIResponse>();
+
+        answer = response.Answer;
+        docs = response.Documents;
+
+        isLoading = false;
+    }
+
+    public class AIResponse
+    {
+        public string Answer { get; set; }
+        public List<DocCard> Documents { get; set; }
+    }
+
+    public class DocCard
+    {
+        public string Name { get; set; }
+        public string Url { get; set; }
+        public string Type { get; set; }
+        public string Summary { get; set; }
+        public string ProcessId { get; set; }
+    }
+}
+
