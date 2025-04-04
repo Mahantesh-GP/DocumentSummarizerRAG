@@ -97,3 +97,41 @@ await foreach (SearchResult<DocumentRag> result in response.GetResultsAsync())
     Console.WriteLine($"Title: {doc.Title}, AppId: {doc.AppId}");
 }
 }
+
+
+options.QueryType = SearchQueryType.Semantic;
+options.QueryLanguage = "en-us"; // Required for semantic
+options.SemanticConfigurationName = "<your-semantic-config-name>"; // Match your index config
+options.Answers = AnswersType.Extractive;
+options.Captions = CaptionsType.Extractive;
+options.HighlightPreTag = "<em>";
+options.HighlightPostTag = "</em>";
+
+
+var results = new List<SearchResult>();
+
+await foreach (var result in response.Value.GetResultsAsync())
+{
+    var doc = result.Document;
+
+    var answer = result.Answers?.FirstOrDefault()?.Text;
+    var caption = result.Captions?.FirstOrDefault()?.Text;
+
+    results.Add(new SearchResult
+    {
+        Document = doc,
+        Highlights = result.Highlights,
+        RerankerScore = result.Score,
+        Answer = answer,
+        Caption = caption
+    });
+}
+
+public class SearchResult
+{
+    public JsonElement Document { get; set; }
+    public IDictionary<string, IList<string>> Highlights { get; set; }
+    public string Answer { get; set; }
+    public string Caption { get; set; }
+    public double? RerankerScore { get; set; }
+}
