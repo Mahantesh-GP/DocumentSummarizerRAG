@@ -410,3 +410,6 @@ Get property address	"What is the address of the property mentioned?"
 Find policy effective and end dates	"Show me policy effective date and expiry date"
 Summarize title document	"Give a short summary of this title document"
 List parties involved	"Who are the parties involved in this transaction?"
+
+
+filter: "metadata_storage_name eq 'yourfile.pdf'"
