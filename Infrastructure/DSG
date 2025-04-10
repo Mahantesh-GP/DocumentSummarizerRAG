@@ -394,3 +394,19 @@ app.MapGet("/search", async (HttpContext context, SearchClient searchClient, str
 });
 
 app.Run();
+
+
+
+
+
+
+
+Use Case	Query to Run
+Retrieve policy number	"What is the policy number for this title document?"
+Check transaction closing date	"When was the closing date of the property?"
+Identify the buyer	"Who is the buyer in this transaction?"
+Identify the borrower	"Name of the borrower listed in the title report"
+Get property address	"What is the address of the property mentioned?"
+Find policy effective and end dates	"Show me policy effective date and expiry date"
+Summarize title document	"Give a short summary of this title document"
+List parties involved	"Who are the parties involved in this transaction?"
