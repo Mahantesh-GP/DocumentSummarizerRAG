@@ -474,5 +474,78 @@ filter: "metadata_storage_name eq 'yourfile.pdf'"
 
 
 
-<SoftDeleteButton AppId="@doc.AppId" DocumentId="@doc.DocumentId" OnDeleted="ReloadResults" />
+////
+
+public interface INotificationService
+{
+    event Action<string, string> OnNotify;
+    void Show(string message, string type = "success"); // success, warning, danger, info
+}
+
+public class NotificationService : INotificationService
+{
+    public event Action<string, string> OnNotify;
+
+    public void Show(string message, string type = "success")
+    {
+        OnNotify?.Invoke(message, type);
+    }
+}
+
+
+builder.Services.AddSingleton<INotificationService, NotificationService>();
+
+
+@inject INotificationService NotificationService
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="toast show position-fixed bottom-0 end-0 m-4 text-white bg-@type" style="z-index:9999;" role="alert">
+        <div class="d-flex">
+            <div class="toast-body">@message</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" @onclick="Clear"></button>
+        </div>
+    </div>
+}
+
+@code {
+    private string message;
+    private string type = "success";
+
+    protected override void OnInitialized()
+    {
+        NotificationService.OnNotify += Show;
+    }
+
+    private void Show(string msg, string t)
+    {
+        message = msg;
+        type = t;
+        StateHasChanged();
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3000);
+            Clear();
+        });
+    }
+
+    private void Clear()
+    {
+        message = null;
+        type = "success";
+        StateHasChanged();
+    }
+}
+
+
+
+
+@inject INotificationService NotificationService
+
+...
+
+NotificationService.Show("Document deleted successfully", "success");
+// or use: "danger", "warning", "info"
+
 
