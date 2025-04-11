@@ -1,212 +1,77 @@
-@page "/related-documents"
-@inject HttpClient Http
-
-<h1 class="mb-4 display-6 fw-bold text-primary">Related Document Search</h1>
-
-<div class="input-group mb-4">
-    <InputText class="form-control" @bind-Value="query" placeholder="Search by buyer, process ID, or keywords..." />
-    <button class="btn btn-primary" @onclick="HandleSearch">Search</button>
-</div>
-
-@if (results != null)
+public enum SearchContext
 {
-    @foreach (var result in results)
-    {
-        <div class="card mb-4 border-primary">
-            <div class="card-header bg-primary text-white">
-                Process ID: <strong>@result.ProcessId</strong>
-            </div>
-            <div class="card-body">
-                <h5 class="card-title">@result.Summary</h5>
-
-                @foreach (var doc in result.Documents)
-                {
-                    <div class="card mb-3">
-                        <div class="card-body d-flex justify-content-between align-items-center">
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1">@doc.Name</h6>
-                                <small class="text-muted">Type: <strong>@doc.Type</strong></small>
-                                <div class="mt-1">
-                                    @if (doc.IsReviewed)
-                                    {
-                                        <span class="badge bg-success me-2">Reviewed</span>
-                                    }
-                                    @if (doc.IsDeleted)
-                                    {
-                                        <span class="badge bg-danger">Deleted</span>
-                                    }
-                                </div>
-                            </div>
-                            <div class="ms-3 text-end">
-                                <button class="btn btn-link btn-sm text-decoration-none" @onclick="() => ShowPreview(doc.Url)">View</button>
-                                <button class="btn btn-success btn-sm me-2" @onclick="() => UpdateStatus(doc, true)">Keep</button>
-                                <button class="btn btn-danger btn-sm" @onclick="() => DeleteDocumentAsync(doc)">Delete</button>
-                            </div>
-                        </div>
-                    </div>
-                }
-            </div>
-        </div>
-    }
+    TitleService_TitleIndex,
+    PolicyService_PolicyIndex
 }
 
-@if (!string.IsNullOrEmpty(previewUrl))
+
 {
-    <div class="modal d-block bg-dark bg-opacity-50" tabindex="-1">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Document Preview</h5>
-                    <button type="button" class="btn-close" @onclick="() => previewUrl = null"></button>
-                </div>
-                <div class="modal-body" style="height:80vh">
-                    <iframe src="@previewUrl" class="w-100 h-100 border-0"></iframe>
-                </div>
-            </div>
-        </div>
-    </div>
-}
-
-@code {
-    private string query;
-    private List<RelatedDocGroup> results;
-    private string previewUrl;
-
-    private async Task HandleSearch()
-    {
-        results = await Http.GetFromJsonAsync<List<RelatedDocGroup>>("api/search?query=" + Uri.EscapeDataString(query));
+  "AzureSearchServices": {
+    "TitleService": {
+      "Endpoint": "https://your-title-service.search.windows.net",
+      "ApiKey": "your-api-key",
+      "Indexes": {
+        "TitleIndex": "title-index-name"
+      }
+    },
+    "PolicyService": {
+      "Endpoint": "https://your-policy-service.search.windows.net",
+      "ApiKey": "your-api-key",
+      "Indexes": {
+        "PolicyIndex": "policy-index-name"
+      }
     }
-
-    private async Task DeleteDocumentAsync(RelatedDoc doc)
-    {
-        var response = await Http.DeleteAsync($"api/document?blobUrl={Uri.EscapeDataString(doc.Url)}");
-        if (response.IsSuccessStatusCode)
-        {
-            doc.IsDeleted = true;
-        }
-    }
-
-    private async Task UpdateStatus(RelatedDoc doc, bool isReviewed)
-    {
-        var payload = new DocumentStatusRequest
-        {
-            BlobUrl = doc.Url,
-            IsReviewed = isReviewed,
-            IsDeleted = doc.IsDeleted
-        };
-
-        var response = await Http.PostAsJsonAsync("api/document/status", payload);
-        if (response.IsSuccessStatusCode)
-        {
-            doc.IsReviewed = isReviewed;
-        }
-    }
-
-    private void ShowPreview(string url)
-    {
-        previewUrl = url;
-    }
-
-    public class RelatedDocGroup
-    {
-        public string ProcessId { get; set; }
-        public string Summary { get; set; }
-        public List<RelatedDoc> Documents { get; set; }
-    }
-
-    public class RelatedDoc
-    {
-        public string Name { get; set; }
-        public string Url { get; set; }
-        public string Type { get; set; }
-        public bool IsReviewed { get; set; }
-        public bool IsDeleted { get; set; }
-    }
-
-    public class DocumentStatusRequest
-    {
-        public string BlobUrl { get; set; }
-        public bool IsReviewed { get; set; }
-        public bool IsDeleted { get; set; }
-    }
+  }
 }
 
 
 
-@page "/search"
-@inject HttpClient Http
 
-<h3>Document Search</h3>
-
-<div class="mb-3">
-    <input class="form-control" placeholder="Enter search query..." @bind="Query" />
-</div>
-<div class="mb-3">
-    <input class="form-control" placeholder="App ID (optional)" @bind="AppId" />
-</div>
-<div class="mb-3">
-    <input class="form-control" placeholder="Property Key (optional)" @bind="PropertyKey" />
-</div>
-<div class="mb-3">
-    <input class="form-control" placeholder="Document Type (optional)" @bind="DocumentType" />
-</div>
-<button class="btn btn-primary" @onclick="RunSearch">Search</button>
-
-@if (Results is not null)
+public class SearchServiceConfig
 {
-    <h4 class="mt-4">Results:</h4>
-    @foreach (var result in Results)
+    public string Endpoint { get; set; }
+    public string ApiKey { get; set; }
+    public Dictionary<string, string> Indexes { get; set; }
+}
+
+
+public class AzureSearchService
+{
+    private readonly IConfiguration _config;
+
+    public AzureSearchService(IConfiguration config)
     {
-        <div class="card my-2 p-3">
-            <div><strong>Title:</strong> @result.Document["title"]</div>
-            <div><strong>Answer:</strong> @result.Answer?.Text</div>
-            <div><strong>Highlights:</strong> @string.Join(", ", result.Highlights?.Values ?? new List<string>())</div>
-            <div><strong>Score:</strong> @result.RerankerScore</div>
-            <div><strong>Blob:</strong> <a href="@result.Document["blobUrl"]" target="_blank">Open Document</a></div>
-        </div>
+        _config = config;
+    }
+
+    public SearchClient GetClient(SearchContext context)
+    {
+        var parts = context.ToString().Split('_');
+        var serviceKey = parts[0];
+        var indexKey = parts[1];
+
+        var section = _config.GetSection($"AzureSearchServices:{serviceKey}");
+        var endpoint = section["Endpoint"];
+        var apiKey = section["ApiKey"];
+        var indexName = section.GetSection("Indexes")[indexKey];
+
+        return new SearchClient(
+            new Uri(endpoint),
+            indexName,
+            new AzureKeyCredential(apiKey)
+        );
     }
 }
 
-@code {
-    public class SearchPayload
-    {
-        public string Query { get; set; }
-        public string AppId { get; set; }
-        public string PropertyKey { get; set; }
-        public string DocumentType { get; set; }
-        public string IndexName { get; set; } = "document-index";
-        public string SemanticConfiguration { get; set; } = "default";
-    }
 
-    public class SearchResult
-    {
-        public JsonElement Document { get; set; }
-        public JsonElement? Answer { get; set; }
-        public Dictionary<string, List<string>> Highlights { get; set; }
-        public double? RerankerScore { get; set; }
-    }
+var client = _searchService.GetClient(SearchContext.PolicyService_PolicyIndex);
 
-    private string Query;
-    private string AppId;
-    private string PropertyKey;
-    private string DocumentType;
-    private List<SearchResult> Results;
+var options = new SearchOptions
+{
+    Size = 10,
+    QueryType = SearchQueryType.Full,
+    IncludeTotalCount = true,
+    SearchFields = { "chunk", "title" }
+};
 
-    private async Task RunSearch()
-    {
-        var payload = new SearchPayload
-        {
-            Query = Query,
-            AppId = AppId,
-            PropertyKey = PropertyKey,
-            DocumentType = DocumentType
-        };
-
-        var response = await Http.PostAsJsonAsync("api/HybridSearch/search", payload);
-        if (response.IsSuccessStatusCode)
-        {
-            Results = await response.Content.ReadFromJsonAsync<List<SearchResult>>();
-        }
-    }
-}
-
+var results = await client.SearchAsync<SearchDocument>("closing", options);
