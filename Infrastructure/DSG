@@ -549,3 +549,5 @@ NotificationService.Show("Document deleted successfully", "success");
 // or use: "danger", "warning", "info"
 
 
+    <div class="toast show position-fixed top-0 start-50 translate-middle-x mt-3 text-white bg-@type"
+         style="z-index:9999; min-width: 300px;" role="alert">
