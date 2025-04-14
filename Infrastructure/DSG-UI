@@ -75,3 +75,20 @@ var options = new SearchOptions
 };
 
 var results = await client.SearchAsync<SearchDocument>("closing", options);
+
+
+@foreach (var result in Results)
+{
+    var rootElement = result.Document.RootElement;
+
+    if (rootElement.ValueKind == JsonValueKind.Object)
+    {
+        foreach (var property in rootElement.EnumerateObject())
+        {
+            <div>
+                <strong>@property.Name:</strong> @property.Value.ToString()
+            </div>
+        }
+    }
+}
+
