@@ -630,3 +630,62 @@ NotificationService.Show("Document deleted successfully", "success");
     </div>
 }
 
+
+
+var searchResult = new SearchResult
+{
+    Summary = chunk,
+    FileUrl = doc.GetString("file_path"),
+    FileName = doc.GetString("file_title"),
+    AppID = doc.GetString("app_id"),
+    Parent_Id = doc.GetString("parent_id"),
+    Captions = result.SemanticSearch?.Captions?.Select(c => c.Text).ToList() ?? new()
+};
+
+// Optional: only include top-level answers once
+if (response.Value.Answers != null && response.Value.Answers.Any())
+{
+    searchResult.Answers = response.Value.Answers.Select(a => a.Text).ToList();
+}
+
+
+
+
+@foreach (var item in Results)
+{
+    <div class="card my-2">
+        <div class="card-body">
+            <h6><a href="@item.FileUrl" target="_blank">@item.FileName</a></h6>
+            <p><strong>AppId:</strong> @item.AppID</p>
+            <p>@item.Summary</p>
+
+            @if (item.Captions?.Any() == true)
+            {
+                <div class="alert alert-light border mt-2">
+                    <strong>Captions:</strong>
+                    <ul>
+                        @foreach (var cap in item.Captions)
+                        {
+                            <li>@cap</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (item.Answers?.Any() == true)
+            {
+                <div class="alert alert-info mt-2">
+                    <strong>Extractive Answers:</strong>
+                    <ul>
+                        @foreach (var ans in item.Answers)
+                        {
+                            <li>@ans</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+
