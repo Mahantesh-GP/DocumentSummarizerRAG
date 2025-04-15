@@ -1,0 +1,94 @@
+public enum SearchContext
+{
+    TitleService_TitleIndex,
+    PolicyService_PolicyIndex
+}
+
+
+{
+  "AzureSearchServices": {
+    "TitleService": {
+      "Endpoint": "https://your-title-service.search.windows.net",
+      "ApiKey": "your-api-key",
+      "Indexes": {
+        "TitleIndex": "title-index-name"
+      }
+    },
+    "PolicyService": {
+      "Endpoint": "https://your-policy-service.search.windows.net",
+      "ApiKey": "your-api-key",
+      "Indexes": {
+        "PolicyIndex": "policy-index-name"
+      }
+    }
+  }
+}
+
+
+
+
+public class SearchServiceConfig
+{
+    public string Endpoint { get; set; }
+    public string ApiKey { get; set; }
+    public Dictionary<string, string> Indexes { get; set; }
+}
+
+
+public class AzureSearchService
+{
+    private readonly IConfiguration _config;
+
+    public AzureSearchService(IConfiguration config)
+    {
+        _config = config;
+    }
+
+    public SearchClient GetClient(SearchContext context)
+    {
+        var parts = context.ToString().Split('_');
+        var serviceKey = parts[0];
+        var indexKey = parts[1];
+
+        var section = _config.GetSection($"AzureSearchServices:{serviceKey}");
+        var endpoint = section["Endpoint"];
+        var apiKey = section["ApiKey"];
+        var indexName = section.GetSection("Indexes")[indexKey];
+
+        return new SearchClient(
+            new Uri(endpoint),
+            indexName,
+            new AzureKeyCredential(apiKey)
+        );
+    }
+}
+
+
+var client = _searchService.GetClient(SearchContext.PolicyService_PolicyIndex);
+
+var options = new SearchOptions
+{
+    Size = 10,
+    QueryType = SearchQueryType.Full,
+    IncludeTotalCount = true,
+    SearchFields = { "chunk", "title" }
+};
+
+var results = await client.SearchAsync<SearchDocument>("closing", options);
+
+
+@foreach (var result in Results)
+{
+    var rootElement = result.Document.RootElement;
+
+    if (rootElement.ValueKind == JsonValueKind.Object)
+    {
+        foreach (var property in rootElement.EnumerateObject())
+        {
+            <div>
+                <strong>@property.Name:</strong> @property.Value.ToString()
+            </div>
+        }
+    }
+}
+

@@ -1,0 +1,553 @@
+PUT https://<YOUR-SEARCH-SERVICE>.search.windows.net/indexes/title-index?api-version=2021-04-30-Preview  
+Content-Type: application/json  
+api-key: <YOUR-ADMIN-API-KEY>
+
+{
+  "name": "title-index",
+  "fields": [
+    { "name": "id", "type": "Edm.String", "key": true, "filterable": true },
+    { "name": "policyNumber", "type": "Edm.String", "searchable": true, "filterable": true, "sortable": false },
+    { "name": "orderNumber", "type": "Edm.String", "searchable": true, "filterable": true, "sortable": false },
+    { "name": "closingDate", "type": "Edm.DateTimeOffset", "filterable": true, "sortable": true },
+    { "name": "policyDate", "type": "Edm.DateTimeOffset", "filterable": true, "sortable": true },
+    { "name": "propertyAddress", "type": "Edm.String", "searchable": true, "filterable": true },
+    { "name": "buyerName", "type": "Edm.String", "searchable": true, "filterable": true },
+    { "name": "sellerName", "type": "Edm.String", "searchable": true, "filterable": true },
+    { "name": "borrowerName", "type": "Edm.String", "searchable": true, "filterable": true },
+    { "name": "transactionId", "type": "Edm.String", "searchable": false, "filterable": true },
+    { "name": "content", "type": "Edm.String", "searchable": true, "filterable": false, "retrievable": true }
+  ],
+  "semantic": {
+    "configurations": [
+      {
+        "name": "title-semantic-config",
+        "prioritizedFields": {
+          "titleField": { "fieldName": "propertyAddress" },
+          "prioritizedContentFields": [
+            { "fieldName": "content" }
+          ],
+          "prioritizedKeywordsFields": [
+            { "fieldName": "policyNumber" },
+            { "fieldName": "orderNumber" }
+          ]
+        }
+      }
+    ],
+    "defaultConfiguration": "title-semantic-config"
+  }
+}
+
+////
+PUT https://<YOUR-SEARCH-SERVICE>.search.windows.net/skillsets/title-skillset?api-version=2021-04-30-Preview  
+Content-Type: application/json  
+api-key: <YOUR-ADMIN-API-KEY>
+
+{
+  "name": "title-skillset",
+  "description": "Skillset for OCR and metadata extraction from title insurance docs",
+  "skills": [
+    {
+      "@odata.type": "#Microsoft.Skills.Vision.OcrSkill",
+      "context": "/document/normalized_images/*",
+      "defaultLanguageCode": "en",
+      "detectOrientation": true,
+      "inputs": [
+        { "name": "image", "source": "/document/normalized_images/*" }
+      ],
+      "outputs": [
+        { "name": "text", "targetName": "text" }
+      ]
+    },
+    {
+      "@odata.type": "#Microsoft.Skills.Text.MergeSkill",
+      "context": "/document",
+      "description": "Merge OCR text with extracted document content",
+      "insertPreTag": " ",
+      "insertPostTag": " ",
+      "inputs": [
+        { "name": "text", "source": "/document/content" },
+        { "name": "itemsToInsert", "source": "/document/normalized_images/*/text" },
+        { "name": "offsets", "source": "/document/normalized_images/*/contentOffset" }
+      ],
+      "outputs": [
+        { "name": "mergedText", "targetName": "merged_text" }
+      ]
+    },
+    {
+      "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
+      "context": "/document",
+      "uri": "https://<YOUR-FUNCTION-APP>.azurewebsites.net/api/ExtractTitleMetadata?code=<FUNCTION-API-KEY>",
+      "httpMethod": "POST",
+      "timeout": "PT10S",
+      "inputs": [
+        { "name": "text", "source": "/document/merged_text" }
+      ],
+      "outputs": [
+        { "name": "closingDate",    "targetName": "closingDate" },
+        { "name": "policyNumber",   "targetName": "policyNumber" },
+        { "name": "orderNumber",    "targetName": "orderNumber" },
+        { "name": "policyDate",     "targetName": "policyDate" },
+        { "name": "propertyAddress","targetName": "propertyAddress" },
+        { "name": "buyerName",      "targetName": "buyerName" },
+        { "name": "sellerName",     "targetName": "sellerName" },
+        { "name": "borrowerName",   "targetName": "borrowerName" },
+        { "name": "transactionId",  "targetName": "transactionId" }
+      ]
+    }
+  ],
+  "cognitiveServices": {
+    "@odata.type": "#Microsoft.Azure.Search.CognitiveServicesByKey",
+    "description": "Cognitive Services for OCR/NER",
+    "key": "<YOUR-COGNITIVE-SERVICES-KEY>"
+  }
+}
+
+
+PUT https://<YOUR-SEARCH-SERVICE>.search.windows.net/indexers/title-indexer?api-version=2021-04-30-Preview  
+Content-Type: application/json  
+api-key: <YOUR-ADMIN-API-KEY>
+
+{
+  "name": "title-indexer",
+  "dataSourceName": "title-ds",
+  "targetIndexName": "title-index",
+  "skillsetName": "title-skillset",
+  "schedule": { "interval": "PT2H" },
+  "parameters": {
+    "configuration": {
+      "dataToExtract": "contentAndMetadata",
+      "imageAction": "generateNormalizedImages"
+    }
+  },
+  "fieldMappings": [
+    {
+      "sourceFieldName": "metadata_storage_path",
+      "targetFieldName": "id",
+      "mappingFunction": { "name": "base64Encode" }
+    }
+  ],
+  "outputFieldMappings": [
+    { "sourceFieldName": "/document/merged_text", "targetFieldName": "content" },
+    { "sourceFieldName": "/document/policyNumber", "targetFieldName": "policyNumber" },
+    { "sourceFieldName": "/document/orderNumber", "targetFieldName": "orderNumber" },
+    { "sourceFieldName": "/document/closingDate", "targetFieldName": "closingDate" },
+    { "sourceFieldName": "/document/policyDate", "targetFieldName": "policyDate" },
+    { "sourceFieldName": "/document/propertyAddress", "targetFieldName": "propertyAddress" },
+    { "sourceFieldName": "/document/buyerName", "targetFieldName": "buyerName" },
+    { "sourceFieldName": "/document/sellerName", "targetFieldName": "sellerName" },
+    { "sourceFieldName": "/document/borrowerName", "targetFieldName": "borrowerName" },
+    { "sourceFieldName": "/document/transactionId", "targetFieldName": "transactionId" }
+  ]
+}
+
+////
+using System;
+using System.IO;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.AspNetCore.Http;
+
+public static class ExtractTitleMetadata
+{
+    // Precompile regex patterns for efficiency
+    private static readonly Regex _policyNumberPattern   = new Regex(@"Policy\s*Number\s*[:\-]\s*([A-Za-z0-9\-\/]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _orderNumberPattern    = new Regex(@"Order\s*Number\s*[:\-]\s*([A-Za-z0-9\-\/]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _closingDatePattern    = new Regex(@"Closing\s*Date\s*[:\-]\s*([0-9]{1,2}[\/\.\-][0-9]{1,2}[\/\.\-][0-9]{2,4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _closingDatePatternAlt = new Regex(@"Closing\s*Date\s*[:\-]\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _policyDatePattern     = new Regex(@"Policy\s*Date\s*[:\-]\s*([0-9]{1,2}[\/\.\-][0-9]{1,2}[\/\.\-][0-9]{2,4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _policyDatePatternAlt  = new Regex(@"Policy\s*Date\s*[:\-]\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _buyerPattern          = new Regex(@"Buyer\s*[:\-]\s*([^\r\n]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _sellerPattern         = new Regex(@"Seller\s*[:\-]\s*([^\r\n]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _borrowerPattern       = new Regex(@"Borrower\s*[:\-]\s*([^\r\n]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _addressPattern        = new Regex(@"Property\s*Address\s*[:\-]\s*([^\r\n]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _transactionIdPattern  = new Regex(@"Transaction\s*ID\s*[:\-]\s*([A-Za-z0-9\-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    [FunctionName("ExtractTitleMetadata")]
+    public static async Task<IActionResult> Run(
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req)
+    {
+        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        using JsonDocument inputJson = JsonDocument.Parse(requestBody);
+        var inputValues = inputJson.RootElement.GetProperty("values");
+
+        // Prepare output structure
+        using var outputDoc = new MemoryStream();
+        using var writer = new Utf8JsonWriter(outputDoc);
+        writer.WriteStartObject();
+        writer.WritePropertyName("values");
+        writer.WriteStartArray();
+
+        foreach (JsonElement record in inputValues.EnumerateArray())
+        {
+            string recordId = record.GetProperty("recordId").GetString();
+            // Get the document text passed in
+            string text = "";
+            if (record.GetProperty("data").TryGetProperty("text", out JsonElement textElem) && textElem.ValueKind != JsonValueKind.Null)
+            {
+                text = textElem.GetString() ?? "";
+            }
+
+            // Initialize output fields as null
+            string closingDate = null;
+            string policyNumber = null;
+            string orderNumber = null;
+            string policyDate = null;
+            string propertyAddress = null;
+            string buyerName = null;
+            string sellerName = null;
+            string borrowerName = null;
+            string transactionId = null;
+
+            // Apply regex patterns to extract values
+            var match = _policyNumberPattern.Match(text);
+            if (match.Success) policyNumber = match.Groups[1].Value.Trim();
+
+            match = _orderNumberPattern.Match(text);
+            if (match.Success) orderNumber = match.Groups[1].Value.Trim();
+
+            match = _closingDatePattern.Match(text);
+            if (!match.Success) match = _closingDatePatternAlt.Match(text);
+            if (match.Success)
+            {
+                string dateStr = match.Groups[1].Value.Trim();
+                if (DateTime.TryParse(dateStr, out DateTime dt))
+                {
+                    // Format as ISO 8601 (UTC) for DateTimeOffset field
+                    closingDate = new DateTimeOffset(dt, TimeSpan.Zero).ToString("o");
+                }
+                else
+                {
+                    closingDate = dateStr;
+                }
+            }
+
+            match = _policyDatePattern.Match(text);
+            if (!match.Success) match = _policyDatePatternAlt.Match(text);
+            if (match.Success)
+            {
+                string dateStr = match.Groups[1].Value.Trim();
+                if (DateTime.TryParse(dateStr, out DateTime dt))
+                {
+                    policyDate = new DateTimeOffset(dt, TimeSpan.Zero).ToString("o");
+                }
+                else
+                {
+                    policyDate = dateStr;
+                }
+            }
+
+            match = _buyerPattern.Match(text);
+            if (match.Success) buyerName = match.Groups[1].Value.Trim();
+
+            match = _sellerPattern.Match(text);
+            if (match.Success) sellerName = match.Groups[1].Value.Trim();
+
+            match = _borrowerPattern.Match(text);
+            if (match.Success) borrowerName = match.Groups[1].Value.Trim();
+
+            match = _addressPattern.Match(text);
+            if (match.Success) propertyAddress = match.Groups[1].Value.Trim();
+
+            match = _transactionIdPattern.Match(text);
+            if (match.Success) transactionId = match.Groups[1].Value.Trim();
+
+            // Write output record
+            writer.WriteStartObject();
+            writer.WriteString("recordId", recordId);
+            writer.WritePropertyName("data");
+            writer.WriteStartObject();
+            writer.WriteString("policyNumber",   policyNumber);
+            writer.WriteString("orderNumber",    orderNumber);
+            writer.WriteString("closingDate",    closingDate);
+            writer.WriteString("policyDate",     policyDate);
+            writer.WriteString("propertyAddress",propertyAddress);
+            writer.WriteString("buyerName",      buyerName);
+            writer.WriteString("sellerName",     sellerName);
+            writer.WriteString("borrowerName",   borrowerName);
+            writer.WriteString("transactionId",  transactionId);
+            writer.WriteEndObject(); // end data
+            writer.WriteEndObject(); // end record
+        }
+
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        writer.Flush();
+        outputDoc.Position = 0;
+        // Return JSON result
+        return new ContentResult {
+            Content = System.Text.Encoding.UTF8.GetString(outputDoc.ToArray()),
+            ContentType = "application/json",
+            StatusCode = 200
+        };
+    }
+}
+
+/////
+
+using Azure;
+using Azure.Search.Documents;
+using Azure.Search.Documents.Models;
+using System.Text.RegularExpressions;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Configuration for Azure Cognitive Search
+string searchServiceEndpoint = builder.Configuration["Search:Endpoint"] ?? "<YOUR-SEARCH-URL>";
+string searchApiKey = builder.Configuration["Search:ApiKey"] ?? "<YOUR-SEARCH-ADMIN-KEY>";
+string indexName = builder.Configuration["Search:IndexName"] ?? "title-index";
+
+// Register the SearchClient as a singleton
+builder.Services.AddSingleton(provider => {
+    Uri endpoint = new Uri(searchServiceEndpoint);
+    var credential = new AzureKeyCredential(searchApiKey);
+    return new SearchClient(endpoint, indexName, credential);
+});
+
+var app = builder.Build();
+
+// Define a DTO for search results
+public record SearchResultItem
+(
+    string Id,
+    string PolicyNumber,
+    string OrderNumber,
+    DateTimeOffset? ClosingDate,
+    DateTimeOffset? PolicyDate,
+    string PropertyAddress,
+    string BuyerName,
+    string SellerName,
+    string BorrowerName,
+    string TransactionId
+);
+
+// Search endpoint
+app.MapGet("/search", async (HttpContext context, SearchClient searchClient, string q) =>
+{
+    if (string.IsNullOrWhiteSpace(q))
+        return Results.BadRequest("Query parameter 'q' is required.");
+
+    string userQuery = q;
+    string filter = null;
+
+    // Basic natural language filter parsing (e.g., "before 2010", "older than 10 years")
+    var beforeMatch = Regex.Match(userQuery, @"\bbefore\s+(\d{4})\b", RegexOptions.IgnoreCase);
+    if (beforeMatch.Success)
+    {
+        string yearStr = beforeMatch.Groups[1].Value;
+        if (int.TryParse(yearStr, out int year))
+        {
+            // Filter closingDate < January 1 of the given year
+            filter = $"closingDate lt {year}-01-01T00:00:00Z";
+        }
+        // Remove the filter text from the query
+        userQuery = Regex.Replace(userQuery, @"\bbefore\s+\d{4}\b", "", RegexOptions.IgnoreCase).Trim();
+    }
+    var olderMatch = Regex.Match(userQuery, @"\bolder than\s+(\d+)\s+year", RegexOptions.IgnoreCase);
+    if (olderMatch.Success)
+    {
+        string yearsStr = olderMatch.Groups[1].Value;
+        if (int.TryParse(yearsStr, out int years))
+        {
+            // Calculate cutoff date X years ago from today
+            DateTime cutoff = DateTime.UtcNow.AddYears(-years);
+            filter = $"closingDate lt {cutoff:yyyy-MM-dd}T00:00:00Z";
+        }
+        userQuery = Regex.Replace(userQuery, @"\bolder than\s+\d+\s+years?\b", "", RegexOptions.IgnoreCase).Trim();
+    }
+
+    // If the remaining query is empty or too generic after removing filters, use a broad keyword
+    if (string.IsNullOrWhiteSpace(userQuery))
+    {
+        userQuery = "policy"; // default term to match all policies (since every doc is a policy)
+    }
+
+    // Prepare search options for semantic query
+    var options = new SearchOptions
+    {
+        QueryType = SearchQueryType.Semantic,
+        SemanticConfigurationName = "title-semantic-config",
+        QueryLanguage = "en-us",             // Assuming content is English
+        QueryCaption = QueryCaptionType.None, // Could use Extractive for snippets
+        QueryAnswer = QueryAnswerType.None    // Could use Extractive for direct answer
+    };
+    if (!string.IsNullOrEmpty(filter))
+    {
+        options.Filter = filter;
+    }
+
+    // Execute the search query
+    var searchResults = await searchClient.SearchAsync<SearchResultItem>(userQuery, options);
+
+    // Collect results
+    List<SearchResultItem> resultsList = new();
+    await foreach (var result in searchResults.Value.GetResultsAsync())
+    {
+        SearchResultItem doc = result.Document;
+        resultsList.Add(doc);
+    }
+
+    return Results.Ok(resultsList);
+});
+
+app.Run();
+
+
+
+
+
+
+
+Use Case	Query to Run
+Retrieve policy number	"What is the policy number for this title document?"
+Check transaction closing date	"When was the closing date of the property?"
+Identify the buyer	"Who is the buyer in this transaction?"
+Identify the borrower	"Name of the borrower listed in the title report"
+Get property address	"What is the address of the property mentioned?"
+Find policy effective and end dates	"Show me policy effective date and expiry date"
+Summarize title document	"Give a short summary of this title document"
+List parties involved	"Who are the parties involved in this transaction?"
+
+
+filter: "metadata_storage_name eq 'yourfile.pdf'"
+
+
+@if (showConfirmation)
+{
+    <div class="modal fade show d-block" style="background-color: rgba(0, 0, 0, 0.5);">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this document?</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-sm" @onclick="CancelDelete">Cancel</button>
+                    <button class="btn btn-danger btn-sm" @onclick="ConfirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<button @onclick="PromptDelete" class="btn btn-sm btn-outline-danger" title="Delete">
+    <i class="bi bi-trash"></i>
+</button>
+
+@code {
+    [Parameter] public string AppId { get; set; }
+    [Parameter] public string DocumentId { get; set; }
+    [Parameter] public EventCallback OnDeleted { get; set; }
+
+    [Inject] public HttpClient Http { get; set; }
+
+    private bool showConfirmation = false;
+
+    private void PromptDelete() => showConfirmation = true;
+
+    private void CancelDelete() => showConfirmation = false;
+
+    private async Task ConfirmDelete()
+    {
+        showConfirmation = false;
+
+        var payload = new SoftDeleteEntry
+        {
+            PartitionKey = AppId,
+            RowKey = DocumentId,
+            DeletedBy = "user@example.com",
+            DeletedOn = DateTime.UtcNow
+        };
+
+        var response = await Http.PostAsJsonAsync("api/documents/soft-delete", payload);
+
+        if (response.IsSuccessStatusCode && OnDeleted.HasDelegate)
+            await OnDeleted.InvokeAsync();
+    }
+}
+
+
+
+////
+
+public interface INotificationService
+{
+    event Action<string, string> OnNotify;
+    void Show(string message, string type = "success"); // success, warning, danger, info
+}
+
+public class NotificationService : INotificationService
+{
+    public event Action<string, string> OnNotify;
+
+    public void Show(string message, string type = "success")
+    {
+        OnNotify?.Invoke(message, type);
+    }
+}
+
+
+builder.Services.AddSingleton<INotificationService, NotificationService>();
+
+
+@inject INotificationService NotificationService
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="toast show position-fixed bottom-0 end-0 m-4 text-white bg-@type" style="z-index:9999;" role="alert">
+        <div class="d-flex">
+            <div class="toast-body">@message</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" @onclick="Clear"></button>
+        </div>
+    </div>
+}
+
+@code {
+    private string message;
+    private string type = "success";
+
+    protected override void OnInitialized()
+    {
+        NotificationService.OnNotify += Show;
+    }
+
+    private void Show(string msg, string t)
+    {
+        message = msg;
+        type = t;
+        StateHasChanged();
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3000);
+            Clear();
+        });
+    }
+
+    private void Clear()
+    {
+        message = null;
+        type = "success";
+        StateHasChanged();
+    }
+}
+
+
+
+
+@inject INotificationService NotificationService
+
+...
+
+NotificationService.Show("Document deleted successfully", "success");
+// or use: "danger", "warning", "info"
+
+
+    <div class="toast show position-fixed top-0 start-50 translate-middle-x mt-3 text-white bg-@type"
+         style="z-index:9999; min-width: 300px;" role="alert">

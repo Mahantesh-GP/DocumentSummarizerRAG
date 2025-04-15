@@ -1,0 +1,124 @@
+@page "/related-documents"
+@inject HttpClient Http
+
+<h1 class="text-3xl font-bold mb-6 text-gray-800">Related Document Search</h1>
+
+<div class="mb-6 flex gap-4 items-center">
+    <InputText class="w-full p-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+               @bind-Value="query" 
+               placeholder="Search by buyer, process ID, or keywords..." />
+    <button class="bg-blue-600 text-white px-4 py-2 rounded-xl shadow hover:bg-blue-700 transition" @onclick="HandleSearch">Search</button>
+</div>
+
+@if (results != null)
+{
+    @foreach (var result in results)
+    {
+        <div class="border-l-4 border-blue-500 bg-white p-5 mb-6 rounded-xl shadow hover:shadow-lg transition">
+            <div class="text-sm text-gray-500 mb-1">Process ID: <strong>@result.ProcessId</strong></div>
+            <div class="text-lg font-semibold text-gray-800 mb-4">@result.Summary</div>
+
+            @foreach (var doc in result.Documents)
+            {
+                <div class="flex justify-between items-center bg-gray-50 border border-gray-200 p-4 rounded-xl mb-3 shadow-sm hover:bg-gray-100">
+                    <div class="w-full">
+                        <div class="font-medium text-gray-900">@doc.Name</div>
+                        <div class="text-sm text-gray-600">Type: <span class="font-semibold">@doc.Type</span></div>
+                        <div class="mt-1 space-x-2">
+                            @if (doc.IsReviewed)
+                            {
+                                <span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">Reviewed</span>
+                            }
+                            @if (doc.IsDeleted)
+                            {
+                                <span class="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium">Deleted</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 ml-4">
+                        <button class="text-blue-600 underline text-sm hover:text-blue-800" @onclick="() => ShowPreview(doc.Url)">View</button>
+                        <button class="bg-green-500 text-white text-sm px-3 py-1 rounded hover:bg-green-600" @onclick="() => UpdateStatus(doc, true)">Keep</button>
+                        <button class="bg-red-500 text-white text-sm px-3 py-1 rounded hover:bg-red-600" @onclick="() => DeleteDocumentAsync(doc)">Delete</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@if (!string.IsNullOrEmpty(previewUrl))
+{
+    <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-xl p-4 w-full max-w-4xl max-h-[90vh] overflow-auto">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-bold text-gray-800">Document Preview</h2>
+                <button class="text-sm text-gray-600 hover:text-gray-900" @onclick="() => previewUrl = null">Close</button>
+            </div>
+            <iframe src="@previewUrl" class="w-full h-[80vh] border rounded"></iframe>
+        </div>
+    </div>
+}
+
+@code {
+    private string query;
+    private List<RelatedDocGroup> results;
+    private string previewUrl;
+
+    private async Task HandleSearch()
+    {
+        results = await Http.GetFromJsonAsync<List<RelatedDocGroup>>("api/search?query=" + Uri.EscapeDataString(query));
+    }
+
+    private async Task DeleteDocumentAsync(RelatedDoc doc)
+    {
+        var response = await Http.DeleteAsync($"api/document?blobUrl={Uri.EscapeDataString(doc.Url)}");
+        if (response.IsSuccessStatusCode)
+        {
+            doc.IsDeleted = true;
+        }
+    }
+
+    private async Task UpdateStatus(RelatedDoc doc, bool isReviewed)
+    {
+        var payload = new DocumentStatusRequest
+        {
+            BlobUrl = doc.Url,
+            IsReviewed = isReviewed,
+            IsDeleted = doc.IsDeleted
+        };
+
+        var response = await Http.PostAsJsonAsync("api/document/status", payload);
+        if (response.IsSuccessStatusCode)
+        {
+            doc.IsReviewed = isReviewed;
+        }
+    }
+
+    private void ShowPreview(string url)
+    {
+        previewUrl = url;
+    }
+
+    public class RelatedDocGroup
+    {
+        public string ProcessId { get; set; }
+        public string Summary { get; set; }
+        public List<RelatedDoc> Documents { get; set; }
+    }
+
+    public class RelatedDoc
+    {
+        public string Name { get; set; }
+        public string Url { get; set; }
+        public string Type { get; set; }
+        public bool IsReviewed { get; set; }
+        public bool IsDeleted { get; set; }
+    }
+
+    public class DocumentStatusRequest
+    {
+        public string BlobUrl { get; set; }
+        public bool IsReviewed { get; set; }
+        public bool IsDeleted { get; set; }
+    }
+}
