@@ -551,3 +551,40 @@ NotificationService.Show("Document deleted successfully", "success");
 
     <div class="toast show position-fixed top-0 start-50 translate-middle-x mt-3 text-white bg-@type"
          style="z-index:9999; min-width: 300px;" role="alert">
+
+
+
+
+<div class="row">
+    <!-- Left: Main Result Section -->
+    <div class="col-md-8">
+        <button @onclick="PerformSearchAsync">Search</button>
+        <p>@resultCountMessage</p>
+        
+        @foreach (var item in searchResults)
+        {
+            <div class="card mb-2">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <a href="@item.FileUrl" target="_blank">@item.FileName</a>
+                    </h5>
+                    <p><strong>AppId:</strong> @item.AppId</p>
+                    <p><strong>Summary:</strong> @item.Summary</p>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Right: File Link Summary Section -->
+    <div class="col-md-4 border-start ps-3">
+        <h5>Files Loaded (@searchResults.Count)</h5>
+        <ul class="list-unstyled">
+            @foreach (var item in searchResults)
+            {
+                <li>
+                    <a href="@item.FileUrl" target="_blank">@item.FileName</a>
+                </li>
+            }
+        </ul>
+    </div>
+</div>
