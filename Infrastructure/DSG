@@ -688,4 +688,16 @@ if (response.Value.Answers != null && response.Value.Answers.Any())
     </div>
 }
 
+public class SearchResult
+{
+    public string Summary { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string AppID { get; set; } = string.Empty;
+    public string Parent_Id { get; set; } = string.Empty;
+
+    // Add new: Captions and Answer (optional)
+    public List<string> Captions { get; set; } = new();
+    public List<string> Answers { get; set; } = new();
+}
 
