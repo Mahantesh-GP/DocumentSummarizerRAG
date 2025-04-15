@@ -551,3 +551,153 @@ NotificationService.Show("Document deleted successfully", "success");
 
     <div class="toast show position-fixed top-0 start-50 translate-middle-x mt-3 text-white bg-@type"
          style="z-index:9999; min-width: 300px;" role="alert">
+
+
+
+
+<div class="row">
+    <!-- Left: Main Result Section -->
+    <div class="col-md-8">
+        <button @onclick="PerformSearchAsync">Search</button>
+        <p>@resultCountMessage</p>
+        
+        @foreach (var item in searchResults)
+        {
+            <div class="card mb-2">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <a href="@item.FileUrl" target="_blank">@item.FileName</a>
+                    </h5>
+                    <p><strong>AppId:</strong> @item.AppId</p>
+                    <p><strong>Summary:</strong> @item.Summary</p>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Right: File Link Summary Section -->
+    <div class="col-md-4 border-start ps-3">
+        <h5>Files Loaded (@searchResults.Count)</h5>
+        <ul class="list-unstyled">
+            @foreach (var item in searchResults)
+            {
+                <li>
+                    <a href="@item.FileUrl" target="_blank">@item.FileName</a>
+                </li>
+            }
+        </ul>
+    </div>
+</div>
+<div class="row">
+    <!-- Left Panel -->
+    <div class="col-md-9">
+        <!-- Your search bar + detailed results -->
+        @* Existing code remains here *@
+    </div>
+
+    <!-- Right Compact Scrollable Panel -->
+    <div class="col-md-3 d-flex flex-column border-start ps-2">
+        <!-- Scrollable file list -->
+        <div class="flex-grow-1 overflow-auto" style="max-height: 400px;">
+            <h6 class="fw-bold mb-2">Results:</h6>
+            <p class="text-muted small">Found @searchResults.Count file(s)</p>
+            <ul class="list-group list-group-flush small">
+                @foreach (var item in searchResults)
+                {
+                    <li class="list-group-item px-1 py-1 text-truncate">
+                        <a href="@item.FileUrl" target="_blank" class="text-decoration-none">@item.FileName</a>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <!-- Footer-style block -->
+        <div class="mt-2 pt-2 border-top">
+            <p class="small text-muted">Status: Loaded @searchResults.Count files</p>
+            @* You can add download/export buttons here too *@
+        </div>
+    </div>
+</div>
+
+
+
+@if (isLoading)
+{
+    <div class="text-center my-3">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+
+
+
+var searchResult = new SearchResult
+{
+    Summary = chunk,
+    FileUrl = doc.GetString("file_path"),
+    FileName = doc.GetString("file_title"),
+    AppID = doc.GetString("app_id"),
+    Parent_Id = doc.GetString("parent_id"),
+    Captions = result.SemanticSearch?.Captions?.Select(c => c.Text).ToList() ?? new()
+};
+
+// Optional: only include top-level answers once
+if (response.Value.Answers != null && response.Value.Answers.Any())
+{
+    searchResult.Answers = response.Value.Answers.Select(a => a.Text).ToList();
+}
+
+
+
+
+@foreach (var item in Results)
+{
+    <div class="card my-2">
+        <div class="card-body">
+            <h6><a href="@item.FileUrl" target="_blank">@item.FileName</a></h6>
+            <p><strong>AppId:</strong> @item.AppID</p>
+            <p>@item.Summary</p>
+
+            @if (item.Captions?.Any() == true)
+            {
+                <div class="alert alert-light border mt-2">
+                    <strong>Captions:</strong>
+                    <ul>
+                        @foreach (var cap in item.Captions)
+                        {
+                            <li>@cap</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (item.Answers?.Any() == true)
+            {
+                <div class="alert alert-info mt-2">
+                    <strong>Extractive Answers:</strong>
+                    <ul>
+                        @foreach (var ans in item.Answers)
+                        {
+                            <li>@ans</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+public class SearchResult
+{
+    public string Summary { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string AppID { get; set; } = string.Empty;
+    public string Parent_Id { get; set; } = string.Empty;
+
+    // Add new: Captions and Answer (optional)
+    public List<string> Captions { get; set; } = new();
+    public List<string> Answers { get; set; } = new();
+}
+
