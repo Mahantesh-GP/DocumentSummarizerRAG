@@ -588,17 +588,33 @@ NotificationService.Show("Document deleted successfully", "success");
         </ul>
     </div>
 </div>
-
-<!-- Right Panel: Compact File List -->
-    <div class="col-md-3 border-start ps-2" style="max-height: 500px; overflow-y: auto;">
-        <h6 class="fw-bold mb-2">Results:</h6>
-        <p class="text-muted small">Found @searchResults.Count file(s)</p>
-        <ul class="list-group list-group-flush small">
-            @foreach (var item in searchResults)
-            {
-                <li class="list-group-item px-1 py-1">
-                    <a href="@item.FileUrl" target="_blank" class="text-decoration-none text-primary">@item.FileName</a>
-                </li>
-            }
-        </ul>
+<div class="row">
+    <!-- Left Panel -->
+    <div class="col-md-9">
+        <!-- Your search bar + detailed results -->
+        @* Existing code remains here *@
     </div>
+
+    <!-- Right Compact Scrollable Panel -->
+    <div class="col-md-3 d-flex flex-column border-start ps-2">
+        <!-- Scrollable file list -->
+        <div class="flex-grow-1 overflow-auto" style="max-height: 400px;">
+            <h6 class="fw-bold mb-2">Results:</h6>
+            <p class="text-muted small">Found @searchResults.Count file(s)</p>
+            <ul class="list-group list-group-flush small">
+                @foreach (var item in searchResults)
+                {
+                    <li class="list-group-item px-1 py-1 text-truncate">
+                        <a href="@item.FileUrl" target="_blank" class="text-decoration-none">@item.FileName</a>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <!-- Footer-style block -->
+        <div class="mt-2 pt-2 border-top">
+            <p class="small text-muted">Status: Loaded @searchResults.Count files</p>
+            @* You can add download/export buttons here too *@
+        </div>
+    </div>
+</div>
