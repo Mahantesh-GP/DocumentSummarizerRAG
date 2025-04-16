@@ -727,3 +727,39 @@ Text:
 
 Return your summary in plain text (not JSON).
 
+
+[Function("FieldExtractionFunction")]
+public async Task<HttpResponseData> Run(
+    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req,
+    FunctionContext executionContext)
+{
+    var logger = executionContext.GetLogger("FieldExtractionFunction");
+    logger.LogInformation("Executing test with hardcoded content");
+
+    // --- Hardcoded test content ---
+    var content = @"
+        This title insurance policy is issued to Borrower John Smith and Seller Jane Doe.
+        The property is located at 123 Main Street, issued on Jan 5, 2016.
+        Policy Number: POL12345. Loan Amount: $230,000.
+    ";
+    var containerName = "title-documents";
+
+    var service = new OpenAiService();
+    var chunks = TokenUtils.ChunkText(content, maxTokensPerChunk: 1000);
+
+    var combinedResults = new FieldExtractionResult
+    {
+        ContainerName = containerName
+    };
+
+    foreach (var chunk in chunks)
+    {
+        var result = await service.ExtractFieldsFromChunkAsync(chunk);
+        combinedResults.Merge(result);
+    }
+
+    var response = req.CreateResponse(HttpStatusCode.OK);
+    await response.WriteAsJsonAsync(combinedResults);
+    return response;
+}
+
