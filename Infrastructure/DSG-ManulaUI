@@ -1,122 +1,26 @@
-@page "/manual-review"
-@inject HttpClient Http
-
-<h1 class="mb-4 display-6 fw-bold text-warning">Manual Review Queue</h1>
-<p class="text-muted mb-3">Review documents flagged as low quality. You can preview, delete, or mark them as reviewed.</p>
-
-@if (isLoading)
+public static async Task RunLocalTest()
 {
-    <div class="text-muted">Loading documents...</div>
-}
-else if (documents.Count == 0)
-{
-    <div class="alert alert-info">No documents pending manual review.</div>
-}
-else
-{
-    @foreach (var doc in documents)
+    var content = @"
+        This title insurance policy is for John Smith. Seller: Jane Doe.
+        Property at 123 Main Street. Policy Number: POL12345.
+        Closing date: Jan 5, 2016. Loan Amount: $230,000.
+    ";
+
+    var containerName = "test-container";
+    var service = new OpenAiService();
+    var chunks = TokenUtils.ChunkText(content, maxTokensPerChunk: 1000);
+
+    var combinedResults = new FieldExtractionResult
     {
-        <div class="card border-warning mb-3">
-            <div class="card-body d-flex justify-content-between align-items-center">
-                <div class="flex-grow-1">
-                    <h5 class="card-title">@doc.Name</h5>
-                    <p class="card-text mb-1">
-                        <small class="text-muted">@doc.Type • Process: @doc.ProcessId</small><br />
-                        <small class="text-muted">@doc.Summary</small>
-                    </p>
-                </div>
-                <div class="text-end">
-                    <button class="btn btn-outline-primary btn-sm me-2" @onclick="() => ShowPreview(doc.Url)">Preview</button>
-                    <button class="btn btn-success btn-sm me-2" @onclick="() => MarkReviewed(doc)">Reviewed</button>
-                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteDocument(doc)">Delete</button>
-                </div>
-            </div>
-        </div>
-    }
-}
+        ContainerName = containerName
+    };
 
-@if (!string.IsNullOrEmpty(previewUrl))
-{
-    <div class="modal d-block bg-dark bg-opacity-75" tabindex="-1">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Preview: @previewUrl</h5>
-                    <button type="button" class="btn-close" @onclick="() => previewUrl = null"></button>
-                </div>
-                <div class="modal-body" style="height:80vh">
-                    <iframe src="@previewUrl" class="w-100 h-100 border-0"></iframe>
-                </div>
-            </div>
-        </div>
-    </div>
-}
-
-@code {
-    private List<RelatedDoc> documents = new();
-    private bool isLoading = true;
-    private string previewUrl;
-
-    protected override async Task OnInitializedAsync()
+    foreach (var chunk in chunks)
     {
-        try
-        {
-            documents = await Http.GetFromJsonAsync<List<RelatedDoc>>("api/search/manual-review");
-        }
-        catch
-        {
-            documents = new();
-        }
-        isLoading = false;
+        var result = await service.ExtractFieldsFromChunkAsync(chunk);
+        combinedResults.Merge(result);
     }
 
-    private async Task MarkReviewed(RelatedDoc doc)
-    {
-        var payload = new DocumentStatusRequest
-        {
-            BlobUrl = doc.Url,
-            IsReviewed = true,
-            IsDeleted = false,
-            ReviewedBy = "mahantesh",
-            ReviewedOn = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
-        };
-
-        var response = await Http.PostAsJsonAsync("api/document/status", payload);
-        if (response.IsSuccessStatusCode)
-        {
-            documents.Remove(doc);
-        }
-    }
-
-    private async Task DeleteDocument(RelatedDoc doc)
-    {
-        var response = await Http.DeleteAsync($"api/document?blobUrl={Uri.EscapeDataString(doc.Url)}");
-        if (response.IsSuccessStatusCode)
-        {
-            documents.Remove(doc);
-        }
-    }
-
-    private void ShowPreview(string url)
-    {
-        previewUrl = url;
-    }
-
-    public class RelatedDoc
-    {
-        public string Name { get; set; }
-        public string Url { get; set; }
-        public string Type { get; set; }
-        public string Summary { get; set; }
-        public string ProcessId { get; set; }
-    }
-
-    public class DocumentStatusRequest
-    {
-        public string BlobUrl { get; set; }
-        public bool IsReviewed { get; set; }
-        public bool IsDeleted { get; set; }
-        public string ReviewedBy { get; set; }
-        public string ReviewedOn { get; set; }
-    }
+    Console.WriteLine("🔍 Extracted Result:");
+    Console.WriteLine(JsonSerializer.Serialize(combinedResults, new JsonSerializerOptions { WriteIndented = true }));
 }

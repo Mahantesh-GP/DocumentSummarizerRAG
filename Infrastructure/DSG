@@ -701,3 +701,65 @@ public class SearchResult
     public List<string> Answers { get; set; } = new();
 }
 
+
+You are a legal document summarizer AI that analyzes mortgage and eClosing documents.
+
+Your goal is to produce a clear, accurate, and concise summary for internal business users reviewing the document.
+
+Please extract and summarize the key points from the text below, including (if available):
+
+1. **Policy Number**
+2. **Borrower Name(s)**
+3. **Seller Name(s)**
+4. **Property Address**
+5. **Closing Date or Issue Date**
+6. **Loan Amount or Transaction Value**
+7. **Notable Legal Clauses or Restrictions**
+8. **Document Purpose** (e.g., Title Insurance Policy, Closing Disclosure)
+9. **Any deadlines, due dates, or important instructions**
+
+Ensure the summary is written in **full sentences**, readable to a business analyst. Use bullet points where applicable.
+
+Text:
+""" 
+{document_chunk}
+"""
+
+Return your summary in plain text (not JSON).
+
+
+[Function("FieldExtractionFunction")]
+public async Task<HttpResponseData> Run(
+    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req,
+    FunctionContext executionContext)
+{
+    var logger = executionContext.GetLogger("FieldExtractionFunction");
+    logger.LogInformation("Executing test with hardcoded content");
+
+    // --- Hardcoded test content ---
+    var content = @"
+        This title insurance policy is issued to Borrower John Smith and Seller Jane Doe.
+        The property is located at 123 Main Street, issued on Jan 5, 2016.
+        Policy Number: POL12345. Loan Amount: $230,000.
+    ";
+    var containerName = "title-documents";
+
+    var service = new OpenAiService();
+    var chunks = TokenUtils.ChunkText(content, maxTokensPerChunk: 1000);
+
+    var combinedResults = new FieldExtractionResult
+    {
+        ContainerName = containerName
+    };
+
+    foreach (var chunk in chunks)
+    {
+        var result = await service.ExtractFieldsFromChunkAsync(chunk);
+        combinedResults.Merge(result);
+    }
+
+    var response = req.CreateResponse(HttpStatusCode.OK);
+    await response.WriteAsJsonAsync(combinedResults);
+    return response;
+}
+
