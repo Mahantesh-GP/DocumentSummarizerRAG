@@ -763,3 +763,21 @@ public async Task<HttpResponseData> Run(
     return response;
 }
 
+public class DocumentInput
+{
+    public string metadata_storage_name { get; set; }
+    public string metadata_storage_path { get; set; }
+}
+
+public class RootRequest
+{
+    public List<DocumentInput> values { get; set; }
+}
+
+input = JsonSerializer.Deserialize<Dictionary<string, string>>(requestBody);
+
+var input = JsonSerializer.Deserialize<RootRequest>(requestBody);
+
+var firstDoc = input?.values?.FirstOrDefault();
+
+logger.LogInformation("Processing file: {FileName} at {Path}", firstDoc?.metadata_storage_name, firstDoc?.metadata_storage_path);
