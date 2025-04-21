@@ -76,14 +76,41 @@ Use Case Example	Why Semantic Helps
 
 
 
-viewModel.RelevanceLabel = result.Score switch
-        {
-            >= 4 => "High Relevance",
-            >= 2 => "Medium Relevance",
-            _ => "Low Relevance"
-        };
+public class ChunkSearchResult
+{
+    public string DocumentId { get; set; }          // Original document ID
+    public string DocumentName { get; set; }        // e.g., "2021-461 Closed Title Report.pdf"
+    public string ChunkText { get; set; }           // Text of the matched chunk
+    public double VectorScore { get; set; }         // From vector search (e.g., 0.75)
+    public double? SemanticScore { get; set; }      // From semantic reranker (if used)
+    public List<string> MatchedTerms { get; set; }  // Semantic terms (e.g., "discharged mortgage")
+}
 
-return chunks
+var results = response.GetResults()
+        .Select(result => new ChunkSearchResult
+        {
+            DocumentId = result.Document["documentId"].ToString(),
+            DocumentName = result.Document["documentName"].ToString(),
+            ChunkText = result.Document["chunkText"].ToString(),
+            VectorScore = result.Score, 
+            SemanticScore = result.SemanticScore,
+            MatchedTerms = result.Captions?.FirstOrDefault()?.Highlights?.Split(',')?.ToList()
+        })
+        .ToList();
+
+
+public class DocumentResultViewModel
+{
+    public string DocumentName { get; set; }
+    public string RelevanceLabel { get; set; }      // "High", "Medium", "Low"
+    public double MaxScore { get; set; }            // Best chunk score for this doc
+    public List<string> TopChunks { get; set; }     // Top 3 relevant chunks
+    public List<string> KeyTerms { get; set; }      // Matched terms across chunks
+}
+
+public List<DocumentResultViewModel> GroupResults(List<ChunkSearchResult> chunks)
+{
+    return chunks
         .GroupBy(c => c.DocumentId)
         .Select(g => new DocumentResultViewModel
         {
@@ -104,4 +131,6 @@ return chunks
             }
         })
         .OrderByDescending(d => d.MaxScore)
+        .ToList();
+}ding(d => d.MaxScore)
         .ToList();
