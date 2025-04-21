@@ -66,3 +66,42 @@ Use Case Example	Why Semantic Helps
 “Show me policy details for the property closed in March 2022”	Semantic understands relationships and time ranges
 “Who is the buyer of this document?”	It knows that "buyer" = "purchaser"
 “Summarize all policies related to mortgage”	It semantically finds relevant documents
+
+
+
+
+
+
+
+
+
+
+viewModel.RelevanceLabel = result.Score switch
+        {
+            >= 4 => "High Relevance",
+            >= 2 => "Medium Relevance",
+            _ => "Low Relevance"
+        };
+
+return chunks
+        .GroupBy(c => c.DocumentId)
+        .Select(g => new DocumentResultViewModel
+        {
+            DocumentName = g.First().DocumentName,
+            MaxScore = g.Max(c => c.VectorScore),
+            TopChunks = g.OrderByDescending(c => c.VectorScore)
+                         .Take(3)
+                         .Select(c => c.ChunkText)
+                         .ToList(),
+            KeyTerms = g.SelectMany(c => c.MatchedTerms)
+                        .Distinct()
+                        .ToList(),
+            RelevanceLabel = g.Max(c => c.VectorScore) switch
+            {
+                > 0.8 => "High Relevance",
+                > 0.5 => "Medium Relevance",
+                _ => "Low Relevance"
+            }
+        })
+        .OrderByDescending(d => d.MaxScore)
+        .ToList();
