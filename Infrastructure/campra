@@ -74,63 +74,85 @@ Use Case Example	Why Semantic Helps
 
 
 
-
-
-public class ChunkSearchResult
+// 1. Define response model
+public class SearchResultViewModel
 {
-    public string DocumentId { get; set; }          // Original document ID
-    public string DocumentName { get; set; }        // e.g., "2021-461 Closed Title Report.pdf"
-    public string ChunkText { get; set; }           // Text of the matched chunk
-    public double VectorScore { get; set; }         // From vector search (e.g., 0.75)
-    public double? SemanticScore { get; set; }      // From semantic reranker (if used)
-    public List<string> MatchedTerms { get; set; }  // Semantic terms (e.g., "discharged mortgage")
+    public string DocumentId { get; set; }
+    public string ParentId { get; set; }
+    public string ChunkText { get; set; }
+    public string RelevanceLabel { get; set; }
+    public string FileUrl { get; set; }
+    public string DocumentTitle { get; set; }
 }
 
-var results = response.GetResults()
-        .Select(result => new ChunkSearchResult
-        {
-            DocumentId = result.Document["documentId"].ToString(),
-            DocumentName = result.Document["documentName"].ToString(),
-            ChunkText = result.Document["chunkText"].ToString(),
-            VectorScore = result.Score, 
-            SemanticScore = result.SemanticScore,
-            MatchedTerms = result.Captions?.FirstOrDefault()?.Highlights?.Split(',')?.ToList()
-        })
-        .ToList();
-
-
-public class DocumentResultViewModel
+// 2. Processing method
+public async Task<List<SearchResultViewModel>> ProcessResultsAsync(
+    List<SearchResult<SearchDocument>> resultsList, 
+    HashSet<string> deleteIds,
+    string query)
 {
-    public string DocumentName { get; set; }
-    public string RelevanceLabel { get; set; }      // "High", "Medium", "Low"
-    public double MaxScore { get; set; }            // Best chunk score for this doc
-    public List<string> TopChunks { get; set; }     // Top 3 relevant chunks
-    public List<string> KeyTerms { get; set; }      // Matched terms across chunks
-}
+    var results = new List<SearchResultViewModel>();
+    
+    if (!resultsList.Any())
+    {
+        _logger.LogWarning("No relevant documents found for query: {Query}", query);
+        return results;
+    }
 
-public List<DocumentResultViewModel> GroupResults(List<ChunkSearchResult> chunks)
-{
-    return chunks
-        .GroupBy(c => c.DocumentId)
-        .Select(g => new DocumentResultViewModel
+    var processedParentIds = new HashSet<string>();
+
+    foreach (var result in resultsList)
+    {
+        var doc = result.Document;
+        var parentId = doc.TryGetValue("parent_id", out var pid) ? pid.ToString() : string.Empty;
+
+        // Filter logic
+        if (!string.IsNullOrEmpty(parentId) && 
+            processedParentIds.Add(parentId) && 
+            deleteIds.Contains(parentId))
         {
-            DocumentName = g.First().DocumentName,
-            MaxScore = g.Max(c => c.VectorScore),
-            TopChunks = g.OrderByDescending(c => c.VectorScore)
-                         .Take(3)
-                         .Select(c => c.ChunkText)
-                         .ToList(),
-            KeyTerms = g.SelectMany(c => c.MatchedTerms)
-                        .Distinct()
-                        .ToList(),
-            RelevanceLabel = g.Max(c => c.VectorScore) switch
+            // Chunk processing
+            var rawChunk = doc.TryGetValue("chunk", out var chunk) 
+                ? chunk.ToString() 
+                : string.Empty;
+
+            var processedChunk = rawChunk.Length > 1000 
+                ? rawChunk.Substring(0, 1000) + "..." 
+                : rawChunk;
+
+            // Score mapping
+            var relevanceLabel = result.Score switch
             {
                 > 0.8 => "High Relevance",
                 > 0.5 => "Medium Relevance",
                 _ => "Low Relevance"
-            }
-        })
-        .OrderByDescending(d => d.MaxScore)
-        .ToList();
-}ding(d => d.MaxScore)
-        .ToList();
+            };
+
+            // URL generation
+            var fileUrl = doc.TryGetValue("blobUrl", out var url)
+                ? _azureStorageService.GetFileUrl(
+                    doc["title"].ToString(), 
+                    "Inhibibbstorage-eclosing")
+                : string.Empty;
+
+            results.Add(new SearchResultViewModel
+            {
+                DocumentId = doc["id"].ToString(),
+                ParentId = parentId,
+                ChunkText = processedChunk,
+                RelevanceLabel = relevanceLabel,
+                FileUrl = fileUrl,
+                DocumentTitle = doc["title"].ToString()
+            });
+        }
+    }
+
+    return results;
+}
+
+// 3. Usage example
+public async Task<List<SearchResultViewModel>> SearchWrapper(string query, HashSet<string> deleteIds)
+{
+    var searchResults = await _searchClient.SearchAsync<SearchDocument>(query);
+    return await ProcessResultsAsync(searchResults.GetResults().ToList(), deleteIds, query);
+}
