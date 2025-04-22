@@ -1,29 +1,53 @@
-{
-  "@odata.type": "#Microsoft.Skills.Text.SplitSkill",
-  "name": "split_path_by_slash",
-  "description": "Splits the blob path by '/'",
-  "context": "/document",
-  "inputs": [
-    {
-      "name": "text",
-      "source": "/document/metadata_storage_path"
-    }
-  ],
-  "outputs": [
-    {
-      "name": "textItems",
-      "targetName": "pathParts"
-    }
-  ],
-  "splitMode": "terms",
-  "defaultLanguageCode": "en",
-  "maximumPageLength": 300,
-  "delimiter": "/"
-}
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
+using System.Net;
+using System.Text.Json;
 
-"outputFieldMappings": [
-  {
-    "sourceFieldName": "/document/pathParts/3",
-    "targetFieldName": "containerName"
-  }
-]
+public class ExtractPathParts
+{
+    private readonly ILogger _logger;
+
+    public ExtractPathParts(ILoggerFactory loggerFactory)
+    {
+        _logger = loggerFactory.CreateLogger<ExtractPathParts>();
+    }
+
+    [Function("ExtractPathParts")]
+    public async Task<HttpResponseData> Run(
+        [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req)
+    {
+        using var reader = new StreamReader(req.Body);
+        var body = await reader.ReadToEndAsync();
+        var input = JsonDocument.Parse(body);
+
+        var values = input.RootElement.GetProperty("values");
+
+        var results = new List<object>();
+
+        foreach (var item in values.EnumerateArray())
+        {
+            var recordId = item.GetProperty("recordId").GetString();
+            var path = item.GetProperty("data").GetProperty("metadata_storage_path").GetString();
+
+            string[] parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            string container = parts.Length > 3 ? parts[3] : "";
+            string folder = parts.Length > 4 ? parts[4] : "";
+
+            results.Add(new
+            {
+                recordId,
+                data = new
+                {
+                    container,
+                    folder
+                }
+            });
+        }
+
+        var response = req.CreateResponse(HttpStatusCode.OK);
+        await response.WriteAsJsonAsync(new { values = results });
+
+        return response;
+    }
+}
