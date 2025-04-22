@@ -1,20 +1,21 @@
-using Azure;
-using Azure.AI.OpenAI;
-
-var client = new OpenAIClient(
-    new Uri("https://<your-resource-name>.openai.azure.com/"),
-    new AzureKeyCredential("<your-api-key>")
-);
-
-string deploymentName = "your-embedding-deployment"; // e.g., "text-embedding-ada-002"
-string inputText = "This is a sample text to embed.";
-
-var response = await client.GetEmbeddingsAsync(
-    new EmbeddingsOptions(inputText),
-    deploymentName
-);
-
-var embedding = response.Value.Data[0].Embedding;
-
-// Print or store the vector
-Console.WriteLine(string.Join(", ", embedding));
+{
+  "sourceFieldName": "metadata_storage_path",
+  "targetFieldName": "containerName",
+  "mappingFunction": {
+    "name": "extractTokenAtPosition",
+    "inputs": [
+      {
+        "name": "text",
+        "source": "/document/metadata_storage_path"
+      },
+      {
+        "name": "delimiter",
+        "value": "/"
+      },
+      {
+        "name": "tokenIndex",
+        "value": 3
+      }
+    ]
+  }
+}
