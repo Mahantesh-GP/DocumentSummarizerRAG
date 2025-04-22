@@ -1,21 +1,29 @@
 {
-  "sourceFieldName": "metadata_storage_path",
-  "targetFieldName": "containerName",
-  "mappingFunction": {
-    "name": "extractTokenAtPosition",
-    "inputs": [
-      {
-        "name": "text",
-        "source": "/document/metadata_storage_path"
-      },
-      {
-        "name": "delimiter",
-        "value": "/"
-      },
-      {
-        "name": "tokenIndex",
-        "value": 3
-      }
-    ]
-  }
+  "@odata.type": "#Microsoft.Skills.Text.SplitSkill",
+  "name": "split_path_by_slash",
+  "description": "Splits the blob path by '/'",
+  "context": "/document",
+  "inputs": [
+    {
+      "name": "text",
+      "source": "/document/metadata_storage_path"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "textItems",
+      "targetName": "pathParts"
+    }
+  ],
+  "splitMode": "terms",
+  "defaultLanguageCode": "en",
+  "maximumPageLength": 300,
+  "delimiter": "/"
 }
+
+"outputFieldMappings": [
+  {
+    "sourceFieldName": "/document/pathParts/3",
+    "targetFieldName": "containerName"
+  }
+]
