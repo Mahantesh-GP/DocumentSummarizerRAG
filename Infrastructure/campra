@@ -1,9 +1,65 @@
-var prefixes = new HashSet<string>();
-        await foreach (BlobItem blobItem in _containerClient.GetBlobsAsync(prefix: null, traits: BlobTraits.None, states: BlobStates.None))
-        {
-            var parts = blobItem.Name.Split('/');
-            if (parts.Length > 1)
-                prefixes.Add(parts[0]); // Folder name
-        }
+var results = new List<ResponseSummary>();
+var seen = new HashSet<string>();
 
-        return prefixes.OrderBy(x => x).ToList();
+if (!resultsList.Any())
+{
+    _logger.LogWarning("No relevant documents found for query: {Query}", request.Query);
+    return results;
+}
+
+foreach (var result in resultsList)
+{
+    var doc = result.Document;
+    if (string.IsNullOrEmpty(doc["metadata_storage_name"].ToString()) || seen.Contains(doc["metadata_storage_name"].ToString()))
+        continue;
+
+    // Process document content
+    var chunk = doc["merged_content"].ToString();
+    var fileTitle = doc["metadata_storage_name"].ToString();
+    var filePath = doc["metadata_storage_path"].ToString();
+    
+    // Get formatted score
+    var score = result.Score switch
+    {
+        >= 4 => $"High Relevance ({result.Score:0.0000})",
+        >= 2 => $"Medium Relevance ({result.Score:0.0000})",
+        _ => $"Low Relevance ({result.Score:0.0000})"
+    };
+
+    // Build structured captions
+    var captions = new Dictionary<string, List<string>>();
+    if (result.Highlights != null)
+    {
+        foreach (var highlight in result.Highlights)
+        {
+            captions[highlight.Key] = highlight.Value
+                .Select(h => WebUtility.HtmlDecode(Regex.Replace(h, "<[^>]*>", ""))) // Clean HTML tags
+                .ToList();
+        }
+    }
+
+    // Add to results
+    results.Add(new ResponseSummary 
+    {
+        Summary = chunk,
+        FileUrl = _azureStorageService.GetFileUrl(fileTitle, "test-1001"),
+        Score = score,
+        Captions = captions,
+        FilePath = filePath
+    });
+
+    seen.Add(fileTitle);
+}
+
+_logger.LogInformation("QueryDocumentAsync completed successfully for query: {Query}", request.Query);
+return results;
+
+
+public class ResponseSummary
+{
+    public string Summary { get; set; }
+    public string FileUrl { get; set; }
+    public string Score { get; set; }
+    public Dictionary<string, List<string>> Captions { get; set; }
+    public string FilePath { get; set; }
+}
