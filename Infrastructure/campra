@@ -1,82 +1,41 @@
-using Microsoft.Azure.Functions.Worker;
-using Microsoft.Azure.Functions.Worker.Http;
-using Microsoft.Extensions.Logging;
-using System.Net;
-using System.Text.Json;
-
-public class ExtractPathParts
+public class FolderOption
 {
-    private readonly ILogger _logger;
+    public string DisplayText { get; set; }  // e.g., "closing/2021_105"
+    public string FolderName { get; set; }   // e.g., "2021_105"
+}
+@page "/folder-search"
+@inject HttpClient Http
 
-    public ExtractPathParts(ILoggerFactory loggerFactory)
+<h3>Select Folder</h3>
+
+<select @onchange="OnFolderSelected">
+    <option value="">-- Select Folder --</option>
+    @foreach (var option in FolderOptions)
     {
-        _logger = loggerFactory.CreateLogger<ExtractPathParts>();
+        <option value="@option.FolderName">@option.DisplayText</option>
+    }
+</select>
+
+<p>Selected Folder: @SelectedFolder</p>
+
+@code {
+    private List<FolderOption> FolderOptions = new();
+    private string SelectedFolder;
+
+    protected override async Task OnInitializedAsync()
+    {
+        FolderOptions = await Http.GetFromJsonAsync<List<FolderOption>>("api/blob/folder-options");
     }
 
-    [Function("ExtractPathParts")]
-    public async Task<HttpResponseData> Run(
-        [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req)
+    private void OnFolderSelected(ChangeEventArgs e)
     {
-        using var reader = new StreamReader(req.Body);
-        var body = await reader.ReadToEndAsync();
-        var input = JsonDocument.Parse(body);
+        SelectedFolder = e.Value?.ToString();
+        // You can now call your search API with SelectedFolder
+    }
 
-        var values = input.RootElement.GetProperty("values");
-
-        var results = new List<object>();
-
-        foreach (var item in values.EnumerateArray())
-        {
-            var recordId = item.GetProperty("recordId").GetString();
-            var path = item.GetProperty("data").GetProperty("metadata_storage_path").GetString();
-
-            string[] parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            string container = parts.Length > 3 ? parts[3] : "";
-            string folder = parts.Length > 4 ? parts[4] : "";
-
-            results.Add(new
-            {
-                recordId,
-                data = new
-                {
-                    container,
-                    folder
-                }
-            });
-        }
-
-        var response = req.CreateResponse(HttpStatusCode.OK);
-        await response.WriteAsJsonAsync(new { values = results });
-
-        return response;
+    public class FolderOption
+    {
+        public string DisplayText { get; set; }
+        public string FolderName { get; set; }
     }
 }
-
-
-{
-  "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
-  "name": "extract_path_parts",
-  "uri": "https://<your-function-app>.azurewebsites.net/api/extractpathparts",
-  "context": "/document",
-  "inputs": [
-    {
-      "name": "metadata_storage_path",
-      "source": "/document/metadata_storage_path"
-    }
-  ],
-  "outputs": [
-    {
-      "name": "container",
-      "targetName": "containerName"
-    },
-    {
-      "name": "folder",
-      "targetName": "folderName"
-    }
-  ],
-  "batchSize": 1,
-  "httpHeaders": {
-    "x-functions-key": "<your-function-key>"
-  }
-}
-
