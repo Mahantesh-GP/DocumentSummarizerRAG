@@ -1,41 +1,9 @@
-public class FolderOption
-{
-    public string DisplayText { get; set; }  // e.g., "closing/2021_105"
-    public string FolderName { get; set; }   // e.g., "2021_105"
-}
-@page "/folder-search"
-@inject HttpClient Http
+var prefixes = new HashSet<string>();
+        await foreach (BlobItem blobItem in _containerClient.GetBlobsAsync(prefix: null, traits: BlobTraits.None, states: BlobStates.None))
+        {
+            var parts = blobItem.Name.Split('/');
+            if (parts.Length > 1)
+                prefixes.Add(parts[0]); // Folder name
+        }
 
-<h3>Select Folder</h3>
-
-<select @onchange="OnFolderSelected">
-    <option value="">-- Select Folder --</option>
-    @foreach (var option in FolderOptions)
-    {
-        <option value="@option.FolderName">@option.DisplayText</option>
-    }
-</select>
-
-<p>Selected Folder: @SelectedFolder</p>
-
-@code {
-    private List<FolderOption> FolderOptions = new();
-    private string SelectedFolder;
-
-    protected override async Task OnInitializedAsync()
-    {
-        FolderOptions = await Http.GetFromJsonAsync<List<FolderOption>>("api/blob/folder-options");
-    }
-
-    private void OnFolderSelected(ChangeEventArgs e)
-    {
-        SelectedFolder = e.Value?.ToString();
-        // You can now call your search API with SelectedFolder
-    }
-
-    public class FolderOption
-    {
-        public string DisplayText { get; set; }
-        public string FolderName { get; set; }
-    }
-}
+        return prefixes.OrderBy(x => x).ToList();
