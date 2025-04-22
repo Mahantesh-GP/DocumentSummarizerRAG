@@ -1,17 +1,20 @@
+using Azure;
+using Azure.AI.OpenAI;
 
-private static HashSet<string> processedRequests = new();
-string requestId = req.Headers["x-ms-request-id"];
+var client = new OpenAIClient(
+    new Uri("https://<your-resource-name>.openai.azure.com/"),
+    new AzureKeyCredential("<your-api-key>")
+);
 
-    if (string.IsNullOrWhiteSpace(requestId))
-        return new BadRequestObjectResult("Missing request ID");
+string deploymentName = "your-embedding-deployment"; // e.g., "text-embedding-ada-002"
+string inputText = "This is a sample text to embed.";
 
-    lock (processedRequests)
-    {
-        if (processedRequests.Contains(requestId))
-            return new ConflictObjectResult("Duplicate request");
+var response = await client.GetEmbeddingsAsync(
+    new EmbeddingsOptions(inputText),
+    deploymentName
+);
 
-        processedRequests.Add(requestId);
-    }
+var embedding = response.Value.Data[0].Embedding;
 
-    // Your logic here
-    await Task.Delay(500); // simulate work
+// Print or store the vector
+Console.WriteLine(string.Join(", ", embedding));
