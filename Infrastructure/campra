@@ -51,3 +51,32 @@ public class ExtractPathParts
         return response;
     }
 }
+
+
+{
+  "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
+  "name": "extract_path_parts",
+  "uri": "https://<your-function-app>.azurewebsites.net/api/extractpathparts",
+  "context": "/document",
+  "inputs": [
+    {
+      "name": "metadata_storage_path",
+      "source": "/document/metadata_storage_path"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "container",
+      "targetName": "containerName"
+    },
+    {
+      "name": "folder",
+      "targetName": "folderName"
+    }
+  ],
+  "batchSize": 1,
+  "httpHeaders": {
+    "x-functions-key": "<your-function-key>"
+  }
+}
+
