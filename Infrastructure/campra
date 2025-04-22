@@ -1,3 +1,5 @@
+
+private static HashSet<string> processedRequests = new();
 string requestId = req.Headers["x-ms-request-id"];
 
     if (string.IsNullOrWhiteSpace(requestId))
