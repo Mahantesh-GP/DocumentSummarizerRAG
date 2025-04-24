@@ -1,68 +1,57 @@
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
-public class AzureSearchService
+class Program
 {
-    private readonly HttpClient _httpClient;
-    private readonly string _endpoint;
-    private readonly string _apiKey;
-    private readonly string _indexName;
-
-    public AzureSearchService(string endpoint, string apiKey, string indexName)
+    static async Task Main(string[] args)
     {
-        _httpClient = new HttpClient();
-        _endpoint = endpoint.TrimEnd('/');
-        _apiKey = apiKey;
-        _indexName = indexName;
+        string endpoint = "https://<your-search-service>.search.windows.net";
+        string apiKey = "<your-api-key>";
+        string indexName = "<your-index-name>";
 
-        _httpClient.DefaultRequestHeaders.Add("api-key", _apiKey);
-        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-    }
+        string queryText = "What is the refund policy?";
 
-    public async Task<string> SearchAsync(string queryText, string embeddingField = "embedding", string semanticConfig = "default")
-    {
-        var payload = new
+        var httpClient = new HttpClient();
+        httpClient.DefaultRequestHeaders.Add("api-key", apiKey);
+        httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var requestBody = new
         {
             search = queryText,
+            queryType = "semantic",
+            semanticConfiguration = "default",
+            captions = "extractive",
+            answers = "extractive",
+            top = 3,
             vectorQueries = new[]
             {
                 new
                 {
                     kind = "text",
                     text = queryText,
-                    fields = new[] { embeddingField },
+                    fields = new[] { "embedding" }, // your vector field name
                     kNearestNeighborsCount = 3
                 }
-            },
-            semanticConfiguration = semanticConfig,
-            queryType = "semantic",
-            captions = "extractive",
-            answers = "extractive",
-            top = 5
+            }
         };
 
-        var json = JsonSerializer.Serialize(payload);
-        var requestUrl = $"{_endpoint}/indexes/{_indexName}/docs/search?api-version=2025-03-01-preview";
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        string requestUrl = $"{endpoint}/indexes/{indexName}/docs/search?api-version=2025-03-01-preview";
+        var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync(requestUrl, content);
-        response.EnsureSuccessStatusCode();
+        var response = await httpClient.PostAsync(requestUrl, content);
 
-        return await response.Content.ReadAsStringAsync();
+        if (response.IsSuccessStatusCode)
+        {
+            string json = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("✅ Search Results:");
+            Console.WriteLine(json);
+        }
+        else
+        {
+            Console.WriteLine($"❌ Error: {response.StatusCode}");
+            string error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine(error);
+        }
     }
 }
-
-
-
-var endpoint = "https://<your-search-service>.search.windows.net";
-var apiKey = "<your-api-key>";
-var indexName = "<your-index-name>";
-
-var searchService = new AzureSearchService(endpoint, apiKey, indexName);
-
-string result = await searchService.SearchAsync("what is the refund policy?");
-Console.WriteLine(result);
