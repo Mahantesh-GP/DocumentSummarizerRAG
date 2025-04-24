@@ -1,6 +1,68 @@
-var blobServiceClient = new BlobServiceClient("<your-connection-string>");
-var containerClient = blobServiceClient.GetBlobContainerClient("<container-name>");
-var blobClient = containerClient.GetBlobClient("eclosing/2021-25/filename.pdf");
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
-var sasUri = blobClient.GenerateSasUri(BlobSasPermissions.Read, DateTimeOffset.UtcNow.AddHours(1));
-Console.WriteLine(sasUri.ToString());
+public class AzureSearchService
+{
+    private readonly HttpClient _httpClient;
+    private readonly string _endpoint;
+    private readonly string _apiKey;
+    private readonly string _indexName;
+
+    public AzureSearchService(string endpoint, string apiKey, string indexName)
+    {
+        _httpClient = new HttpClient();
+        _endpoint = endpoint.TrimEnd('/');
+        _apiKey = apiKey;
+        _indexName = indexName;
+
+        _httpClient.DefaultRequestHeaders.Add("api-key", _apiKey);
+        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+    public async Task<string> SearchAsync(string queryText, string embeddingField = "embedding", string semanticConfig = "default")
+    {
+        var payload = new
+        {
+            search = queryText,
+            vectorQueries = new[]
+            {
+                new
+                {
+                    kind = "text",
+                    text = queryText,
+                    fields = new[] { embeddingField },
+                    kNearestNeighborsCount = 3
+                }
+            },
+            semanticConfiguration = semanticConfig,
+            queryType = "semantic",
+            captions = "extractive",
+            answers = "extractive",
+            top = 5
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        var requestUrl = $"{_endpoint}/indexes/{_indexName}/docs/search?api-version=2025-03-01-preview";
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.PostAsync(requestUrl, content);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadAsStringAsync();
+    }
+}
+
+
+
+var endpoint = "https://<your-search-service>.search.windows.net";
+var apiKey = "<your-api-key>";
+var indexName = "<your-index-name>";
+
+var searchService = new AzureSearchService(endpoint, apiKey, indexName);
+
+string result = await searchService.SearchAsync("what is the refund policy?");
+Console.WriteLine(result);
