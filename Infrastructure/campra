@@ -1,1 +1,4 @@
 https://learn.microsoft.com/en-us/azure/search/hybrid-search-how-to-query
+
+var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+var result = JsonSerializer.Deserialize<SearchResponse>(responseText, options);
