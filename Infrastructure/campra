@@ -1,66 +1,21 @@
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
+using var jsonDoc = JsonDocument.Parse(responseText);
+var root = jsonDoc.RootElement;
 
-class Program
+if (root.TryGetProperty("value", out var docs))
 {
-    static async Task Main(string[] args)
+    Console.WriteLine("🔍 Search Results:");
+    foreach (var doc in docs.EnumerateArray())
     {
-        var endpoint = "https://<YOUR_SERVICE_NAME>.search.windows.net";
-        var indexName = "<YOUR_INDEX_NAME>";
-        var apiKey = "<YOUR_API_KEY>";
+        string hotelName = doc.GetProperty("HotelName").GetString();
+        string description = doc.GetProperty("Description").GetString();
+        string city = doc.GetProperty("Address").GetProperty("City").GetString();
 
-        var url = $"{endpoint}/indexes/{indexName}/docs/search?api-version=2024-07-01";
-
-        using var client = new HttpClient();
-        client.DefaultRequestHeaders.Add("api-key", apiKey);
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-        var requestBody = new
-        {
-            search = "historic hotel walk to restaurants and shopping",
-            select = "HotelName, Description, Address/City",
-            top = 10,
-            vectorQueries = new[]
-            {
-                new {
-                    kind = "vector",
-                    fields = "DescriptionVector",
-                    vector = GetExampleVector(), // Replace with actual vector
-                    exhaustive = true,
-                    k = 10
-                },
-                new {
-                    kind = "vector",
-                    fields = "DescriptionVector",
-                    vector = GetExampleVector(), // Replace with actual vector
-                    exhaustive = true,
-                    k = 10
-                }
-            }
-        };
-
-        string json = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions { WriteIndented = true });
-        Console.WriteLine("Request:\n" + json);
-
-        var response = await client.PostAsync(
-            url,
-            new StringContent(json, Encoding.UTF8, "application/json")
-        );
-
-        var responseText = await response.Content.ReadAsStringAsync();
-
-        Console.WriteLine($"\nStatus: {response.StatusCode}");
-        Console.WriteLine("Response:");
-        Console.WriteLine(responseText);
+        Console.WriteLine($"\n🏨 {hotelName}");
+        Console.WriteLine($"📍 City: {city}");
+        Console.WriteLine($"📝 {description}");
     }
-
-    static float[] GetExampleVector()
-    {
-        // ⚠️ Replace with your actual vector data from embedding generation
-        return new float[] {
-            -0.009154141f, 0.018708462f, 0.02178128f, -0.00086512347f
-            // ... add all 1536 or 3072 dimensions
-        };
-    }
+}
+else
+{
+    Console.WriteLine("No documents found.");
 }
