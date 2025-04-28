@@ -1,63 +1,100 @@
 
 using System;
 using System.Collections.Generic;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using System.IO;
 
-namespace AzureSearchBackup
+public class AzureSearchService
 {
-    class Program
+    private readonly ILogger _logger;
+    private readonly ISearchClient _client;
+
+    public AzureSearchService(ILogger logger, ISearchClient client)
     {
-        static async Task Main(string[] args)
+        _logger = logger;
+        _client = client;
+    }
+
+    public async Task<SearchResponse> SearchDocumentsAsync(SearchRequest request)
+    {
+        var filters = new List<string>();
+
+        // Parse and add filters based on query
+        ParseDateFilters(request, filters);
+
+        // Handle empty or generic query
+        request.Query = string.IsNullOrWhiteSpace(request.Query) 
+            ? "policy" // Default broad keyword
+            : CleanQuery(request.Query, filters);
+
+        // Combine filters
+        var options = new SearchOptions
         {
-            string searchServiceName = "<YOUR_SEARCH_SERVICE_NAME>";
-            string apiKey = "<YOUR_API_KEY>";  // Your Admin Key
-            string apiVersion = "2023-10-01-Preview"; // Adjust if needed
-            string endpoint = $"https://{searchServiceName}.search.windows.net";
+            Filter = filters.Any() ? string.Join(" and ", filters) : null
+        };
 
-            var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("api-key", apiKey);
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var response = await _client.SearchAsync<SearchDocument>(request.Query, options);
+        _logger.LogInformation("Search completed successfully.");
 
-            // Fetch and save all indexes
-            await FetchAndSaveData(client, endpoint, "/indexes", "indexes");
+        return response;
+    }
 
-            // Fetch and save all skillsets
-            await FetchAndSaveData(client, endpoint, "/skillsets", "skillsets");
-
-            // Fetch and save all indexers
-            await FetchAndSaveData(client, endpoint, "/indexers", "indexers");
-
-            Console.WriteLine("Backup completed.");
+    private void ParseDateFilters(SearchRequest request, List<string> filters)
+    {
+        // Handle "before [year]" filter
+        var beforeMatch = Regex.Match(request.Query, @"before\s+(\d{4})", RegexOptions.IgnoreCase);
+        if (beforeMatch.Success)
+        {
+            int year = int.TryParse(beforeMatch.Groups[1].Value, out int parsedYear) ? parsedYear : DateTime.Now.Year;
+            filters.Add($"closingDate lt {year}-01-01T00:00:00Z");
+            request.Query = Regex.Replace(request.Query, @"before\s+\d{4}", "", RegexOptions.IgnoreCase);
         }
 
-        static async Task FetchAndSaveData(HttpClient client, string endpoint, string path, string type)
+        // Handle "older than [years]" filter
+        var olderMatch = Regex.Match(request.Query, @"older than\s+(\d+)\s*year", RegexOptions.IgnoreCase);
+        if (olderMatch.Success)
         {
-            try
+            if (int.TryParse(olderMatch.Groups[1].Value, out int years))
             {
-                HttpResponseMessage response = await client.GetAsync(endpoint + path + "?api-version=2023-10-01-Preview");
-                response.EnsureSuccessStatusCode();
-
-                string jsonResponse = await response.Content.ReadAsStringAsync();
-                dynamic data = JsonConvert.DeserializeObject(jsonResponse);
-
-                foreach (var item in data.value)
-                {
-                    string fileName = $"{type}/{item.name}.json";  // Each index/skillset/indexer as individual file
-                    Directory.CreateDirectory("BackupFolder/" + type); // Create folder if not exists
-
-                    // Write each item to individual JSON file
-                    File.WriteAllText($"BackupFolder/{fileName}", JsonConvert.SerializeObject(item, Formatting.Indented));
-                    Console.WriteLine($"Backup for {item.name} saved.");
-                }
+                var cutoff = DateTime.UtcNow.AddYears(-years);
+                filters.Add($"closingDate lt {cutoff:yyyy-MM-ddT00:00:00Z}");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching {type}: {ex.Message}");
-            }
+            request.Query = Regex.Replace(request.Query, @"older than\s+\d+\s*year", "", RegexOptions.IgnoreCase);
+        }
+
+        // Add document ID filter if provided
+        if (!string.IsNullOrEmpty(request.SelectedDocumentId))
+        {
+            filters.Add($"documentId eq '{request.SelectedDocumentId}'");
         }
     }
+
+    private string CleanQuery(string query, List<string> filters)
+    {
+        // Remove all filter patterns from the query
+        var cleanedQuery = Regex.Replace(query, @"before\s+\d{4}|older than\s+\d+\s*year", "", RegexOptions.IgnoreCase);
+        return string.IsNullOrWhiteSpace(cleanedQuery) ? "policy" : cleanedQuery.Trim();
+    }
 }
+
+public class SearchRequest
+{
+    public string Query { get; set; }
+    public string SelectedDocumentId { get; set; }
+}
+
+public class SearchOptions
+{
+    public string Filter { get; set; }
+}
+
+public class SearchResponse { } // Placeholder for response type
+public interface ILogger
+{
+    void LogInformation(string message);
+}
+public interface ISearchClient
+{
+    Task<SearchResponse> SearchAsync<T>(string query, SearchOptions options);
+}
+public class SearchDocument { } // Placeholder for document type
