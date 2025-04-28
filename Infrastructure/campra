@@ -1,32 +1,63 @@
-var answers = searchResults.SemanticSearch.Answers
-    .Select(chunk =>
-    {
-        var result = resultsList.FirstOrDefault(r => r.ChunkId == chunk.Key);
-        var doc = result?.Document;
 
-        var parentId = doc?.ContainsKey("parent_id") == true ? doc["parent_id"]?.ToString() : null;
-        var fileName = doc?.ContainsKey("title") == true ? doc["title"]?.ToString() : string.Empty;
-        var folderName = doc?.ContainsKey("folderName") == true ? doc["folderName"]?.ToString() : string.Empty;
-        var fileUrl = _azureStorageService.GetFileUrl($"{folderName}/{fileName}");
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using System.IO;
 
-        return new Answers
-        {
-            Text = chunk.Text,
-            Score = chunk.Score,
-            Highlights = chunk.Highlights,
-            ParentId = parentId,
-            FileName = fileName,
-            FileUrl = fileUrl
-        };
-    })
-    .ToList();
-
-public class Answers
+namespace AzureSearchBackup
 {
-    public string Text { get; set; }
-    public double Score { get; set; }
-    public string Highlights { get; set; }
-    public string ParentId { get; set; }
-    public string FileName { get; set; }     // Add this
-    public string FileUrl { get; set; }      // Add this
+    class Program
+    {
+        static async Task Main(string[] args)
+        {
+            string searchServiceName = "<YOUR_SEARCH_SERVICE_NAME>";
+            string apiKey = "<YOUR_API_KEY>";  // Your Admin Key
+            string apiVersion = "2023-10-01-Preview"; // Adjust if needed
+            string endpoint = $"https://{searchServiceName}.search.windows.net";
+
+            var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("api-key", apiKey);
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            // Fetch and save all indexes
+            await FetchAndSaveData(client, endpoint, "/indexes", "indexes");
+
+            // Fetch and save all skillsets
+            await FetchAndSaveData(client, endpoint, "/skillsets", "skillsets");
+
+            // Fetch and save all indexers
+            await FetchAndSaveData(client, endpoint, "/indexers", "indexers");
+
+            Console.WriteLine("Backup completed.");
+        }
+
+        static async Task FetchAndSaveData(HttpClient client, string endpoint, string path, string type)
+        {
+            try
+            {
+                HttpResponseMessage response = await client.GetAsync(endpoint + path + "?api-version=2023-10-01-Preview");
+                response.EnsureSuccessStatusCode();
+
+                string jsonResponse = await response.Content.ReadAsStringAsync();
+                dynamic data = JsonConvert.DeserializeObject(jsonResponse);
+
+                foreach (var item in data.value)
+                {
+                    string fileName = $"{type}/{item.name}.json";  // Each index/skillset/indexer as individual file
+                    Directory.CreateDirectory("BackupFolder/" + type); // Create folder if not exists
+
+                    // Write each item to individual JSON file
+                    File.WriteAllText($"BackupFolder/{fileName}", JsonConvert.SerializeObject(item, Formatting.Indented));
+                    Console.WriteLine($"Backup for {item.name} saved.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching {type}: {ex.Message}");
+            }
+        }
+    }
 }
