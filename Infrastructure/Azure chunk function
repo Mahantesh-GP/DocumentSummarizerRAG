@@ -144,4 +144,100 @@ private async Task<Dictionary<string, string>> CallOpenAIAsync(string chunk)
   ]
 }
 
+[Function("ExtractFieldsWithOCR")]
+public async Task<HttpResponseData> Run(
+    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req,
+    FunctionContext executionContext)
+{
+    var logger = executionContext.GetLogger("ExtractFieldsWithOCR");
+    var response = req.CreateResponse(HttpStatusCode.OK);
+    var extractedFields = new Dictionary<string, object>();
+    var values = new List<WebApiSkillResponseRecord>();
 
+    try
+    {
+        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        var input = JsonConvert.DeserializeObject<WebApiSkillRequest>(requestBody);
+
+        var openAiClient = new AzureOpenAIClient(
+            new Uri("https://<your-resource>.openai.azure.com/"),
+            new AzureKeyCredential("<your-key>")
+        );
+
+        foreach (var record in input.Values)
+        {
+            if (!record.Data.TryGetValue("text", out var rawText) || string.IsNullOrWhiteSpace(rawText))
+            {
+                logger.LogWarning($"Missing 'text' in recordId {record.RecordId}");
+                continue;
+            }
+
+            string text = rawText;
+            var allExtractedFields = new Dictionary<string, string>();
+
+            var chunks = TokenUtils.ChunkText(text, maxTokensPerChunk: 6000);
+
+            foreach (var chunk in chunks)
+            {
+                string prompt = $"""
+                Based on the document content, extract the following fields if they exist:
+                - Closing Date
+                - Order Number
+                - Buyer Name
+                - Seller Name
+
+                Text:
+                {chunk}
+                """;
+
+                var messages = new[]
+                {
+                    new SystemChatMessage("You are an AI assistant that extracts structured fields from title insurance documents."),
+                    new UserChatMessage(prompt)
+                };
+
+                try
+                {
+                    var responseChat = await openAiClient.GetChatCompletionsAsync(
+                        deploymentOrModelName: "gpt-4o",
+                        new ChatCompletionsOptions
+                        {
+                            Messages = messages.ToList(),
+                            MaxTokens = 800,
+                            Temperature = 0.2f
+                        });
+
+                    var content = responseChat.Value.Choices[0].Message.Content;
+
+                    var parsed = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
+
+                    foreach (var kvp in parsed)
+                    {
+                        if (!allExtractedFields.ContainsKey(kvp.Key))
+                            allExtractedFields[kvp.Key] = kvp.Value;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error calling OpenAI on recordId {0}", record.RecordId);
+                }
+            }
+
+            values.Add(new WebApiSkillResponseRecord
+            {
+                RecordId = record.RecordId,
+                Data = allExtractedFields
+            });
+        }
+
+        await response.WriteAsJsonAsync(new WebApiSkillResponse { Values = values });
+        return response;
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Fatal error processing request.");
+        response.StatusCode = HttpStatusCode.InternalServerError;
+        await response.WriteStringAsync("Error: " + ex.Message);
+        return response;
+    }
+}
