@@ -91,4 +91,57 @@ private async Task<Dictionary<string, string>> CallOpenAIAsync(string chunk)
 }
 
 }
+{
+  "@odata.type": "#Microsoft.Skills.Skillset",
+  "name": "title-extraction-skillset",
+  "description": "Extracts structured fields from OCR'ed title PDFs",
+  "skills": [
+    {
+      "@odata.type": "#Microsoft.Skills.Text.SplitSkill",
+      "textSplitMode": "pages",
+      "maximumPageLength": 4000,
+      "inputs": [
+        {
+          "name": "text",
+          "source": "/document/merged_content"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "textItems",
+          "targetName": "chunks"
+        }
+      ]
+    },
+    {
+      "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
+      "name": "extract-fields-skill",
+      "uri": "https://<your-function-app>.azurewebsites.net/api/extractfields",
+      "batchSize": 1,
+      "timeout": "PT30S",
+      "inputs": [
+        {
+          "name": "chunks",
+          "source": "/document/chunks/*"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "closing_date",
+          "targetName": "closingDate"
+        },
+        {
+          "name": "order_number",
+          "targetName": "orderNumber"
+        },
+        {
+          "name": "borrower_name",
+          "targetName": "borrowerName"
+        }
+      ],
+      "context": "/document"
+    }
+  ]
+}
+
 
