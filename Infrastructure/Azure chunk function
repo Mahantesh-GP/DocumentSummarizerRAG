@@ -1,243 +1,49 @@
 
-// Azure Function: Custom Skill for Azure Cognitive Search (Structured Field Extraction via Azure OpenAI) using System.Text.Json; using System.Net.Http.Headers; using Microsoft.Azure.Functions.Worker; using Microsoft.Azure.Functions.Worker.Http; using Microsoft.Extensions.Logging; using System.Text;
+<EditForm Model="@filterModel">
+    <div>
+        <InputRadioGroup @bind-Value="filterModel.SelectedField">
+            <InputRadio Value="property" /> Property
+            <InputRadio Value="orderNumber" /> Order Number
+            <InputRadio Value="closingDate" /> Closing Date
+        </InputRadioGroup>
+    </div>
+    <InputText @bind-Value="filterModel.FilterValue" placeholder="Enter value" />
+    <button @onclick="ApplyFilter">Apply</button>
+</EditForm>
 
-public class ExtractFieldsFunction { private readonly HttpClient _httpClient; private readonly ILogger _logger; private const string OpenAiEndpoint = "https://YOUR-RESOURCE-NAME.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT_NAME/chat/completions?api-version=2024-02-15-preview"; private const string OpenAiKey = "YOUR_AZURE_OPENAI_KEY";
+@code {
+    private FilterModel filterModel = new();
 
-public ExtractFieldsFunction(ILoggerFactory loggerFactory)
-{
-    _logger = loggerFactory.CreateLogger<ExtractFieldsFunction>();
-    _httpClient = new HttpClient();
-}
-
-[Function("ExtractFields")]
-public async Task<HttpResponseData> RunAsync(
-    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req)
-{
-    var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-    var payload = JsonDocument.Parse(requestBody);
-    var records = payload.RootElement.GetProperty("values");
-
-    var responseList = new List<object>();
-
-    foreach (var record in records.EnumerateArray())
+    private void ApplyFilter()
     {
-        var recordId = record.GetProperty("recordId").GetString();
-        var chunks = record.GetProperty("data").GetProperty("chunks").EnumerateArray().Select(e => e.GetString()).ToList();
-
-        var finalFields = new Dictionary<string, string>();
-
-        foreach (var chunk in chunks)
-        {
-            var llmResponse = await CallOpenAIAsync(chunk);
-
-            foreach (var kvp in llmResponse)
-            {
-                if (!finalFields.ContainsKey(kvp.Key) || string.IsNullOrWhiteSpace(finalFields[kvp.Key]))
-                    finalFields[kvp.Key] = kvp.Value;
-            }
-        }
-
-        responseList.Add(new
-        {
-            recordId,
-            data = finalFields
-        });
+        // Call your API or build search query
+        var filter = $"{filterModel.SelectedField} eq '{filterModel.FilterValue}'";
+        Console.WriteLine($"Filter applied: {filter}");
+        // pass this filter to your Azure Search API
     }
 
-    var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
-    await response.WriteAsJsonAsync(new { values = responseList });
-    return response;
-}
-
-private async Task<Dictionary<string, string>> CallOpenAIAsync(string chunk)
-{
-    var prompt = $"""
-        Extract the following fields from the document:
-        - Closing Date
-        - Order Number
-        - Borrower Name
-
-        Respond ONLY in JSON format like:
-        {{ "closing_date": "", "order_number": "", "borrower_name": "" }}
-
-        Text:
-        {chunk}
-    """;
-
-    var body = new
+    public class FilterModel
     {
-        messages = new[]
-        {
-            new { role = "system", content = "You are an intelligent extraction assistant for title insurance documents." },
-            new { role = "user", content = prompt }
-        },
-        temperature = 0,
-        max_tokens = 512,
-        stream = false
-    };
-
-    var request = new HttpRequestMessage(HttpMethod.Post, OpenAiEndpoint);
-    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", OpenAiKey);
-    request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-
-    var result = await _httpClient.SendAsync(request);
-    var content = await result.Content.ReadAsStringAsync();
-
-    using var doc = JsonDocument.Parse(content);
-    var msg = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
-
-    var extracted = JsonSerializer.Deserialize<Dictionary<string, string>>(msg ?? "{}");
-    return extracted ?? new();
-}
-
-}
-{
-  "@odata.type": "#Microsoft.Skills.Skillset",
-  "name": "title-extraction-skillset",
-  "description": "Extracts structured fields from OCR'ed title PDFs",
-  "skills": [
-    {
-      "@odata.type": "#Microsoft.Skills.Text.SplitSkill",
-      "textSplitMode": "pages",
-      "maximumPageLength": 4000,
-      "inputs": [
-        {
-          "name": "text",
-          "source": "/document/merged_content"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "textItems",
-          "targetName": "chunks"
-        }
-      ]
-    },
-    {
-      "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
-      "name": "extract-fields-skill",
-      "uri": "https://<your-function-app>.azurewebsites.net/api/extractfields",
-      "batchSize": 1,
-      "timeout": "PT30S",
-      "inputs": [
-        {
-          "name": "chunks",
-          "source": "/document/chunks/*"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "closing_date",
-          "targetName": "closingDate"
-        },
-        {
-          "name": "order_number",
-          "targetName": "orderNumber"
-        },
-        {
-          "name": "borrower_name",
-          "targetName": "borrowerName"
-        }
-      ],
-      "context": "/document"
-    }
-  ]
-}
-
-[Function("ExtractFieldsWithOCR")]
-public async Task<HttpResponseData> Run(
-    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req,
-    FunctionContext executionContext)
-{
-    var logger = executionContext.GetLogger("ExtractFieldsWithOCR");
-    var response = req.CreateResponse(HttpStatusCode.OK);
-    var extractedFields = new Dictionary<string, object>();
-    var values = new List<WebApiSkillResponseRecord>();
-
-    try
-    {
-        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-        var input = JsonConvert.DeserializeObject<WebApiSkillRequest>(requestBody);
-
-        var openAiClient = new AzureOpenAIClient(
-            new Uri("https://<your-resource>.openai.azure.com/"),
-            new AzureKeyCredential("<your-key>")
-        );
-
-        foreach (var record in input.Values)
-        {
-            if (!record.Data.TryGetValue("text", out var rawText) || string.IsNullOrWhiteSpace(rawText))
-            {
-                logger.LogWarning($"Missing 'text' in recordId {record.RecordId}");
-                continue;
-            }
-
-            string text = rawText;
-            var allExtractedFields = new Dictionary<string, string>();
-
-            var chunks = TokenUtils.ChunkText(text, maxTokensPerChunk: 6000);
-
-            foreach (var chunk in chunks)
-            {
-                string prompt = $"""
-                Based on the document content, extract the following fields if they exist:
-                - Closing Date
-                - Order Number
-                - Buyer Name
-                - Seller Name
-
-                Text:
-                {chunk}
-                """;
-
-                var messages = new[]
-                {
-                    new SystemChatMessage("You are an AI assistant that extracts structured fields from title insurance documents."),
-                    new UserChatMessage(prompt)
-                };
-
-                try
-                {
-                    var responseChat = await openAiClient.GetChatCompletionsAsync(
-                        deploymentOrModelName: "gpt-4o",
-                        new ChatCompletionsOptions
-                        {
-                            Messages = messages.ToList(),
-                            MaxTokens = 800,
-                            Temperature = 0.2f
-                        });
-
-                    var content = responseChat.Value.Choices[0].Message.Content;
-
-                    var parsed = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
-
-                    foreach (var kvp in parsed)
-                    {
-                        if (!allExtractedFields.ContainsKey(kvp.Key))
-                            allExtractedFields[kvp.Key] = kvp.Value;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error calling OpenAI on recordId {0}", record.RecordId);
-                }
-            }
-
-            values.Add(new WebApiSkillResponseRecord
-            {
-                RecordId = record.RecordId,
-                Data = allExtractedFields
-            });
-        }
-
-        await response.WriteAsJsonAsync(new WebApiSkillResponse { Values = values });
-        return response;
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Fatal error processing request.");
-        response.StatusCode = HttpStatusCode.InternalServerError;
-        await response.WriteStringAsync("Error: " + ex.Message);
-        return response;
+        public string SelectedField { get; set; } = "property"; // default
+        public string FilterValue { get; set; }
     }
 }
+
+if (!string.IsNullOrEmpty(request.SelectedField) && !string.IsNullOrEmpty(request.FilterValue))
+{
+    filters.Add($"{request.SelectedField} eq '{request.FilterValue}'");
+}
+
+public string FilterField { get; set; }
+public string FilterValue { get; set; }
+
+var request = new UserQueryRequest
+{
+    Query = Query,
+    SelectedDocumentId = selectedDocumentId,
+    SearchType = SearchType.semantic_vector,
+    FilterField = filterModel.SelectedField,
+    FilterValue = filterModel.FilterValue
+};
+
+
