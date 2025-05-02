@@ -1,57 +1,72 @@
 
-using System;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
-
 public static class DateFilterParser
 {
-    public static (string updatedQuery, List<string> filters) Parse(string query, string defaultField = "closingDate")
+    private static readonly Dictionary<string, string> SupportedFieldMap = new()
+    {
+        { "policy date", "policyDate" },
+        { "closing date", "closingDate" }
+    };
+
+    public static (string updatedQuery, List<string> filters, string fieldUsed) Parse(string query)
     {
         var filters = new List<string>();
-        string fieldName = defaultField;
+        string fieldName = null;
 
-        // Extract dynamic field (e.g., field:policyDate)
-        var fieldMatch = Regex.Match(query, @"field:(\w+)", RegexOptions.IgnoreCase);
-        if (fieldMatch.Success)
+        // Detect field based on plain text keywords
+        foreach (var key in SupportedFieldMap.Keys)
         {
-            fieldName = fieldMatch.Groups[1].Value;
-            query = Regex.Replace(query, @"field:(\w+)", "", RegexOptions.IgnoreCase).Trim();
+            if (query.Contains(key, StringComparison.OrdinalIgnoreCase))
+            {
+                fieldName = SupportedFieldMap[key];
+                query = Regex.Replace(query, key, "", RegexOptions.IgnoreCase).Trim();
+                break;
+            }
         }
+
+        if (fieldName == null)
+            throw new InvalidOperationException("No valid field name (e.g., 'policy date') found in query.");
+
+        // Apply filters
+        ApplyYearBasedFilters(query, fieldName, filters, out string cleanedQuery);
+        return (cleanedQuery, filters, fieldName);
+    }
+
+    private static void ApplyYearBasedFilters(string query, string fieldName, List<string> filters, out string updatedQuery)
+    {
+        updatedQuery = query;
 
         // @before yyyy
         var beforeMatch = Regex.Match(query, @"@before\s+(\d{4})", RegexOptions.IgnoreCase);
         if (beforeMatch.Success && int.TryParse(beforeMatch.Groups[1].Value, out int beforeYear))
         {
             filters.Add($"{fieldName} lt {beforeYear}-01-01T00:00:00Z");
-            query = Regex.Replace(query, @"@before\s+\d{4}", "", RegexOptions.IgnoreCase).Trim();
+            updatedQuery = Regex.Replace(updatedQuery, @"@before\s+\d{4}", "", RegexOptions.IgnoreCase).Trim();
         }
 
         // @after yyyy
-        var afterMatch = Regex.Match(query, @"@after\s+(\d{4})", RegexOptions.IgnoreCase);
+        var afterMatch = Regex.Match(updatedQuery, @"@after\s+(\d{4})", RegexOptions.IgnoreCase);
         if (afterMatch.Success && int.TryParse(afterMatch.Groups[1].Value, out int afterYear))
         {
             filters.Add($"{fieldName} gt {afterYear}-01-01T00:00:00Z");
-            query = Regex.Replace(query, @"@after\s+\d{4}", "", RegexOptions.IgnoreCase).Trim();
+            updatedQuery = Regex.Replace(updatedQuery, @"@after\s+\d{4}", "", RegexOptions.IgnoreCase).Trim();
         }
 
         // @older than x years
-        var olderMatch = Regex.Match(query, @"@older than\s+(\d+)\s*years?", RegexOptions.IgnoreCase);
+        var olderMatch = Regex.Match(updatedQuery, @"@older than\s+(\d+)\s*years?", RegexOptions.IgnoreCase);
         if (olderMatch.Success && int.TryParse(olderMatch.Groups[1].Value, out int olderYears))
         {
             var cutoff = DateTime.UtcNow.AddYears(-olderYears).ToString("yyyy-MM-ddTHH:mm:ssZ");
             filters.Add($"{fieldName} lt {cutoff}");
-            query = Regex.Replace(query, @"@older than\s+\d+\s*years?", "", RegexOptions.IgnoreCase).Trim();
+            updatedQuery = Regex.Replace(updatedQuery, @"@older than\s+\d+\s*years?", "", RegexOptions.IgnoreCase).Trim();
         }
 
         // @greater than x years
-        var greaterMatch = Regex.Match(query, @"@greater than\s+(\d+)\s*years?", RegexOptions.IgnoreCase);
+        var greaterMatch = Regex.Match(updatedQuery, @"@greater than\s+(\d+)\s*years?", RegexOptions.IgnoreCase);
         if (greaterMatch.Success && int.TryParse(greaterMatch.Groups[1].Value, out int greaterYears))
         {
             var cutoff = DateTime.UtcNow.AddYears(-greaterYears).ToString("yyyy-MM-ddTHH:mm:ssZ");
             filters.Add($"{fieldName} gt {cutoff}");
-            query = Regex.Replace(query, @"@greater than\s+\d+\s*years?", "", RegexOptions.IgnoreCase).Trim();
+            updatedQuery = Regex.Replace(updatedQuery, @"@greater than\s+\d+\s*years?", "", RegexOptions.IgnoreCase).Trim();
         }
-
-        return (query, filters);
     }
 }
