@@ -1,119 +1,17 @@
 
-This is a very insightful question — and key to understanding hybrid search in Azure Cognitive Search.
-
-Let’s break down how text query and vector query work individually and together.
-
-
----
-
-1. Text Query (Keyword or Semantic)
-
-Input: "closing documents from 2021"
-
-Azure tokenizes the input and does:
-
-Keyword matching (if searchMode = any | all)
-
-Scoring based on TF-IDF (term frequency–inverse document frequency)
-
-
-If semantic search is enabled:
-
-Azure reranks top N text results using semantic models
-
-
-Output: Ranked results based on text relevance
-
-
-
----
-
-2. Vector Query (KNN Search)
-
-Input: Vector embedding of your query (e.g., [0.23, -0.55, 0.91, ...])
-
-Azure compares it with the pre-indexed vectors in your index (from vectorConfig)
-
-Uses cosine similarity / dot product to compute vector score
-
-Returns top K documents closest to the query vector
-
-
-
----
-
-3. Hybrid Search (Text + Vector)
-
-> This is where magic happens — and Azure combines both signals.
-
-
-
-Internally it does this:
-
-1. Accepts:
-
-A text query
-
-A vector (generated from the same text via OpenAI or other embedding model)
-
-
-
-2. Executes both:
-
-Runs a text query (normal search or semantic)
-
-Runs a vector KNN search
-
-
-
-3. Combines results using scoring:
-
-hybridScore = λ * vectorScore + (1 - λ) * textScore
-
-Where λ is the weight for vector score vs text score (Azure tunes this internally).
-
-
-4. Optionally applies semantic reranking on top if enabled.
-
-
-
-
----
-
-Result:
-
-You get a single ranked list that includes:
-
-Keyword relevance
-
-Semantic closeness (if enabled)
-
-Embedding similarity (vector score)
-
-
-
-This improves recall + precision — catching both literal matches and semantic near-matches.
-
-
----
-
-Visual Summary:
-
-Query: "closing docs for 2021"
-     |
-     |--> Text Search -----------> TF-IDF / Semantic rerank
-     |
-     |--> Vector Search ---------> KNN on embedding vectors
-     |
-     +--> Hybrid Score Merge ----> Final sorted result
-
-
----
-
-When to Use What?
-
-
----
-
-Would you like a code snippet in .NET that shows how to run hybrid search with vector + query string?
-
+string GetValue(SearchDocument doc, string key)
+{
+    return doc.ContainsKey(key) && doc[key] != null ? doc[key].ToString() : string.Empty;
+}
+
+var docFiles = new DocumentFields
+{
+    borrowerName = GetValue(doc, "borrowerName"),
+    buyerName = GetValue(doc, "buyerName"),
+    sellerName = GetValue(doc, "sellerName"),
+    propertyAddress = GetValue(doc, "propertyAddress"),
+    orderNumber = GetValue(doc, "orderNumber"),
+    policyNumber = GetValue(doc, "policyNumber"),
+    policyDate = GetValue(doc, "policyDate"),
+    closingDate = GetValue(doc, "ClosingDate")
+};
