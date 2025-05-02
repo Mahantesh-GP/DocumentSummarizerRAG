@@ -1,17 +1,57 @@
 
-string GetValue(SearchDocument doc, string key)
-{
-    return doc.ContainsKey(key) && doc[key] != null ? doc[key].ToString() : string.Empty;
-}
+using System;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
-var docFiles = new DocumentFields
+public static class DateFilterParser
 {
-    borrowerName = GetValue(doc, "borrowerName"),
-    buyerName = GetValue(doc, "buyerName"),
-    sellerName = GetValue(doc, "sellerName"),
-    propertyAddress = GetValue(doc, "propertyAddress"),
-    orderNumber = GetValue(doc, "orderNumber"),
-    policyNumber = GetValue(doc, "policyNumber"),
-    policyDate = GetValue(doc, "policyDate"),
-    closingDate = GetValue(doc, "ClosingDate")
-};
+    public static (string updatedQuery, List<string> filters) Parse(string query, string defaultField = "closingDate")
+    {
+        var filters = new List<string>();
+        string fieldName = defaultField;
+
+        // Extract dynamic field (e.g., field:policyDate)
+        var fieldMatch = Regex.Match(query, @"field:(\w+)", RegexOptions.IgnoreCase);
+        if (fieldMatch.Success)
+        {
+            fieldName = fieldMatch.Groups[1].Value;
+            query = Regex.Replace(query, @"field:(\w+)", "", RegexOptions.IgnoreCase).Trim();
+        }
+
+        // @before yyyy
+        var beforeMatch = Regex.Match(query, @"@before\s+(\d{4})", RegexOptions.IgnoreCase);
+        if (beforeMatch.Success && int.TryParse(beforeMatch.Groups[1].Value, out int beforeYear))
+        {
+            filters.Add($"{fieldName} lt {beforeYear}-01-01T00:00:00Z");
+            query = Regex.Replace(query, @"@before\s+\d{4}", "", RegexOptions.IgnoreCase).Trim();
+        }
+
+        // @after yyyy
+        var afterMatch = Regex.Match(query, @"@after\s+(\d{4})", RegexOptions.IgnoreCase);
+        if (afterMatch.Success && int.TryParse(afterMatch.Groups[1].Value, out int afterYear))
+        {
+            filters.Add($"{fieldName} gt {afterYear}-01-01T00:00:00Z");
+            query = Regex.Replace(query, @"@after\s+\d{4}", "", RegexOptions.IgnoreCase).Trim();
+        }
+
+        // @older than x years
+        var olderMatch = Regex.Match(query, @"@older than\s+(\d+)\s*years?", RegexOptions.IgnoreCase);
+        if (olderMatch.Success && int.TryParse(olderMatch.Groups[1].Value, out int olderYears))
+        {
+            var cutoff = DateTime.UtcNow.AddYears(-olderYears).ToString("yyyy-MM-ddTHH:mm:ssZ");
+            filters.Add($"{fieldName} lt {cutoff}");
+            query = Regex.Replace(query, @"@older than\s+\d+\s*years?", "", RegexOptions.IgnoreCase).Trim();
+        }
+
+        // @greater than x years
+        var greaterMatch = Regex.Match(query, @"@greater than\s+(\d+)\s*years?", RegexOptions.IgnoreCase);
+        if (greaterMatch.Success && int.TryParse(greaterMatch.Groups[1].Value, out int greaterYears))
+        {
+            var cutoff = DateTime.UtcNow.AddYears(-greaterYears).ToString("yyyy-MM-ddTHH:mm:ssZ");
+            filters.Add($"{fieldName} gt {cutoff}");
+            query = Regex.Replace(query, @"@greater than\s+\d+\s*years?", "", RegexOptions.IgnoreCase).Trim();
+        }
+
+        return (query, filters);
+    }
+}
