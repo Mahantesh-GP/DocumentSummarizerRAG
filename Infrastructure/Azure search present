@@ -52,3 +52,10 @@ private void ParseDateAndEqualityFilters(UserQueryRequest request, List<string> 
         filters.Add($"containerName eq '{request.SelectedDocumentId}'");
     }
 }
+private Dictionary<string, string> SupportedFieldMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+{
+    { "order number", "orderNumber" },
+    { "closing date", "closingDate" },
+    { "policy date", "policyDate" },
+    { "commitment date", "commitmentDate" }
+};
