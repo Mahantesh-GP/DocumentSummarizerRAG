@@ -3,59 +3,68 @@ private void ParseDateAndEqualityFilters(UserQueryRequest request, List<string> 
 {
     string fieldName = null;
 
-    // Step 1: Detect known field name from query
+    // Step 1: Detect field from supported keywords
     foreach (var key in SupportedFieldMap.Keys)
     {
         if (request.Query.ToLower().Contains(key.ToLower()))
         {
             fieldName = SupportedFieldMap[key];
+            request.Query = Regex.Replace(request.Query, key, "", RegexOptions.IgnoreCase).Trim();
             break;
         }
     }
 
     if (string.IsNullOrEmpty(fieldName)) return;
 
-    // Step 2: Regex filters for different expressions
-    var patterns = new (string Label, string Pattern, Func<Match, string> FilterBuilder)[]
+    // Step 2: Handle "before [year]"
+    var beforeMatch = Regex.Match(request.Query, @"before\s+(\d{4})", RegexOptions.IgnoreCase);
+    if (beforeMatch.Success && int.TryParse(beforeMatch.Groups[1].Value, out var beforeYear))
     {
-        ("before", @"before\s+(\d{4})", m => $"{fieldName} lt {m.Groups[1].Value}-01-01T00:00:00Z"),
-        ("older", @"older than\s+(\d+)\s*years?", m =>
-        {
-            var years = int.Parse(m.Groups[1].Value);
-            var cutoff = DateTime.UtcNow.AddYears(-years).ToString("yyyy-MM-ddTHH:mm:ssZ");
-            return $"{fieldName} lt {cutoff}";
-        }),
-        ("after", @"after\s+(\d{4})", m => $"{fieldName} ge {m.Groups[1].Value}-01-01T00:00:00Z"),
-        ("greater", @"greater than\s+(\d+)\s*years?", m =>
-        {
-            var years = int.Parse(m.Groups[1].Value);
-            var cutoff = DateTime.UtcNow.AddYears(-years).ToString("yyyy-MM-ddTHH:mm:ssZ");
-            return $"{fieldName} gt {cutoff}";
-        }),
-        ("is", @"(?:is|equals)\s+(\w+)", m => $"{fieldName} eq '{m.Groups[1].Value}'")
-    };
-
-    foreach (var (label, pattern, builder) in patterns)
-    {
-        var match = Regex.Match(request.Query, pattern, RegexOptions.IgnoreCase);
-        if (match.Success)
-        {
-            filters.Add(builder(match));
-            request.Query = Regex.Replace(request.Query, pattern, "", RegexOptions.IgnoreCase);
-            break;
-        }
+        filters.Add($"{fieldName} lt {beforeYear}-01-01T00:00:00Z");
+        request.Query = Regex.Replace(request.Query, @"before\s+\d{4}", "", RegexOptions.IgnoreCase).Trim();
+        return;
     }
 
-    // Optional: support document ID filter separately
+    // Step 3: Handle "older than [years]"
+    var olderMatch = Regex.Match(request.Query, @"older than\s+(\d+)\s*years?", RegexOptions.IgnoreCase);
+    if (olderMatch.Success && int.TryParse(olderMatch.Groups[1].Value, out var olderYears))
+    {
+        var cutoff = DateTime.UtcNow.AddYears(-olderYears).ToString("yyyy-MM-ddTHH:mm:ssZ");
+        filters.Add($"{fieldName} lt {cutoff}");
+        request.Query = Regex.Replace(request.Query, @"older than\s+\d+\s*years?", "", RegexOptions.IgnoreCase).Trim();
+        return;
+    }
+
+    // Step 4: Handle "after [year]"
+    var afterMatch = Regex.Match(request.Query, @"after\s+(\d{4})", RegexOptions.IgnoreCase);
+    if (afterMatch.Success && int.TryParse(afterMatch.Groups[1].Value, out var afterYear))
+    {
+        filters.Add($"{fieldName} ge {afterYear}-01-01T00:00:00Z");
+        request.Query = Regex.Replace(request.Query, @"after\s+\d{4}", "", RegexOptions.IgnoreCase).Trim();
+        return;
+    }
+
+    // Step 5: Handle "greater than [years]"
+    var greaterMatch = Regex.Match(request.Query, @"greater than\s+(\d+)\s*years?", RegexOptions.IgnoreCase);
+    if (greaterMatch.Success && int.TryParse(greaterMatch.Groups[1].Value, out var greaterYears))
+    {
+        var cutoff = DateTime.UtcNow.AddYears(-greaterYears).ToString("yyyy-MM-ddTHH:mm:ssZ");
+        filters.Add($"{fieldName} gt {cutoff}");
+        request.Query = Regex.Replace(request.Query, @"greater than\s+\d+\s*years?", "", RegexOptions.IgnoreCase).Trim();
+        return;
+    }
+
+    // Step 6: Default equality match (e.g. "order number 12345")
+    var eqMatch = Regex.Match(request.Query, @"\b(\d[\w-]*)\b", RegexOptions.IgnoreCase);
+    if (eqMatch.Success)
+    {
+        filters.Add($"{fieldName} eq '{eqMatch.Groups[1].Value}'");
+        request.Query = Regex.Replace(request.Query, eqMatch.Groups[1].Value, "", RegexOptions.IgnoreCase).Trim();
+    }
+
+    // Step 7: Optional document ID filter
     if (!string.IsNullOrWhiteSpace(request.SelectedDocumentId))
     {
         filters.Add($"containerName eq '{request.SelectedDocumentId}'");
     }
 }
-private Dictionary<string, string> SupportedFieldMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-{
-    { "order number", "orderNumber" },
-    { "closing date", "closingDate" },
-    { "policy date", "policyDate" },
-    { "commitment date", "commitmentDate" }
-};
