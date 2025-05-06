@@ -1,8 +1,2 @@
 
-string inputText = "Property located at 230 Durham Point L, Durham, NH, 0836.";
-var match = Regex.Match(inputText, @"\b\d{1,5}\s+[A-Za-z\s]+,\s*[A-Za-z\s]+,\s*[A-Za-z]{2},\s*\d{4,5}\b", RegexOptions.IgnoreCase);
-
-if (match.Success)
-{
-    Console.WriteLine("Address: " + match.Value);
-}
+@"\b\d{1,5}\s+[A-Za-z0-9\s]+,\s*[A-Za-z\s]+,\s*[A-Za-z]{2}\s*\d{4,5}\b"
