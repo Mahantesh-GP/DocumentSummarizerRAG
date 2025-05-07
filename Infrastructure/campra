@@ -1,0 +1,100 @@
+
+using System;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+
+public class AzureSearchService
+{
+    private readonly ILogger _logger;
+    private readonly ISearchClient _client;
+
+    public AzureSearchService(ILogger logger, ISearchClient client)
+    {
+        _logger = logger;
+        _client = client;
+    }
+
+    public async Task<SearchResponse> SearchDocumentsAsync(SearchRequest request)
+    {
+        var filters = new List<string>();
+
+        // Parse and add filters based on query
+        ParseDateFilters(request, filters);
+
+        // Handle empty or generic query
+        request.Query = string.IsNullOrWhiteSpace(request.Query) 
+            ? "policy" // Default broad keyword
+            : CleanQuery(request.Query, filters);
+
+        // Combine filters
+        var options = new SearchOptions
+        {
+            Filter = filters.Any() ? string.Join(" and ", filters) : null
+        };
+
+        var response = await _client.SearchAsync<SearchDocument>(request.Query, options);
+        _logger.LogInformation("Search completed successfully.");
+
+        return response;
+    }
+
+    private void ParseDateFilters(SearchRequest request, List<string> filters)
+    {
+        // Handle "before [year]" filter
+        var beforeMatch = Regex.Match(request.Query, @"before\s+(\d{4})", RegexOptions.IgnoreCase);
+        if (beforeMatch.Success)
+        {
+            int year = int.TryParse(beforeMatch.Groups[1].Value, out int parsedYear) ? parsedYear : DateTime.Now.Year;
+            filters.Add($"closingDate lt {year}-01-01T00:00:00Z");
+            request.Query = Regex.Replace(request.Query, @"before\s+\d{4}", "", RegexOptions.IgnoreCase);
+        }
+
+        // Handle "older than [years]" filter
+        var olderMatch = Regex.Match(request.Query, @"older than\s+(\d+)\s*year", RegexOptions.IgnoreCase);
+        if (olderMatch.Success)
+        {
+            if (int.TryParse(olderMatch.Groups[1].Value, out int years))
+            {
+                var cutoff = DateTime.UtcNow.AddYears(-years);
+                filters.Add($"closingDate lt {cutoff:yyyy-MM-ddT00:00:00Z}");
+            }
+            request.Query = Regex.Replace(request.Query, @"older than\s+\d+\s*year", "", RegexOptions.IgnoreCase);
+        }
+
+        // Add document ID filter if provided
+        if (!string.IsNullOrEmpty(request.SelectedDocumentId))
+        {
+            filters.Add($"documentId eq '{request.SelectedDocumentId}'");
+        }
+    }
+
+    private string CleanQuery(string query, List<string> filters)
+    {
+        // Remove all filter patterns from the query
+        var cleanedQuery = Regex.Replace(query, @"before\s+\d{4}|older than\s+\d+\s*year", "", RegexOptions.IgnoreCase);
+        return string.IsNullOrWhiteSpace(cleanedQuery) ? "policy" : cleanedQuery.Trim();
+    }
+}
+
+public class SearchRequest
+{
+    public string Query { get; set; }
+    public string SelectedDocumentId { get; set; }
+}
+
+public class SearchOptions
+{
+    public string Filter { get; set; }
+}
+
+public class SearchResponse { } // Placeholder for response type
+public interface ILogger
+{
+    void LogInformation(string message);
+}
+public interface ISearchClient
+{
+    Task<SearchResponse> SearchAsync<T>(string query, SearchOptions options);
+}
+public class SearchDocument { } // Placeholder for document type

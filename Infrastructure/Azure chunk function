@@ -1,0 +1,49 @@
+
+<EditForm Model="@filterModel">
+    <div>
+        <InputRadioGroup @bind-Value="filterModel.SelectedField">
+            <InputRadio Value="property" /> Property
+            <InputRadio Value="orderNumber" /> Order Number
+            <InputRadio Value="closingDate" /> Closing Date
+        </InputRadioGroup>
+    </div>
+    <InputText @bind-Value="filterModel.FilterValue" placeholder="Enter value" />
+    <button @onclick="ApplyFilter">Apply</button>
+</EditForm>
+
+@code {
+    private FilterModel filterModel = new();
+
+    private void ApplyFilter()
+    {
+        // Call your API or build search query
+        var filter = $"{filterModel.SelectedField} eq '{filterModel.FilterValue}'";
+        Console.WriteLine($"Filter applied: {filter}");
+        // pass this filter to your Azure Search API
+    }
+
+    public class FilterModel
+    {
+        public string SelectedField { get; set; } = "property"; // default
+        public string FilterValue { get; set; }
+    }
+}
+
+if (!string.IsNullOrEmpty(request.SelectedField) && !string.IsNullOrEmpty(request.FilterValue))
+{
+    filters.Add($"{request.SelectedField} eq '{request.FilterValue}'");
+}
+
+public string FilterField { get; set; }
+public string FilterValue { get; set; }
+
+var request = new UserQueryRequest
+{
+    Query = Query,
+    SelectedDocumentId = selectedDocumentId,
+    SearchType = SearchType.semantic_vector,
+    FilterField = filterModel.SelectedField,
+    FilterValue = filterModel.FilterValue
+};
+
+
