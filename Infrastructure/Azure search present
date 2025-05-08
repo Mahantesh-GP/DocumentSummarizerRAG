@@ -1,51 +1,55 @@
-@if (Results != null && Results.Any())
-{
-    <div class="mb-3">
-        <h5 class="text-muted">Found @Results.Count result(s)</h5>
-    </div>
 
-    @foreach (var result in Results)
-    {
-        <div class="card shadow-sm border mb-4 p-3 rounded">
-            <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <h6 class="mb-1">
-                        <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
-                        <a href="@result.Document["url"]" target="_blank" class="text-primary fw-bold text-decoration-none">
-                            @result.Document["title"]
-                        </a>
-                    </h6>
-                    <p class="mb-1 text-muted small">AppId: @result.Document["appId"]</p>
-                    <span class="badge bg-info text-dark">Score: @result.Score?.ToString("0.00")</span>
-                </div>
-            </div>
+<div class="container mt-3 p-3 border rounded shadow bg-white">
+    <h4 class="text-primary text-center mb-4">Information Governance & Data Retention</h4>
 
-            @if (!string.IsNullOrWhiteSpace(result.Snippet))
-            {
-                <div class="mt-3">
-                    <strong>Relevant Snippet:</strong>
-                    <div class="alert alert-light border">
-                        @((MarkupString)result.Snippet)
-                    </div>
-                </div>
-            }
-
-            @if (result.Captions?.Any() == true)
-            {
-                <div class="mt-2">
-                    <strong>Captions:</strong>
-                    <ul class="list-group list-group-flush">
-                        @foreach (var caption in result.Captions)
-                        {
-                            <li class="list-group-item">@caption.Text</li>
-                        }
-                    </ul>
-                </div>
-            }
+    <div class="row mb-3">
+        <div class="col-md-2">
+            <label class="form-label">Application</label>
+            <select class="form-select" @bind="selectedDocumentId">
+                <option disabled selected value="">-- Select Application --</option>
+                @foreach (var app in appidList)
+                {
+                    <option value="@app.FolderName">@app.DisplayText</option>
+                }
+            </select>
         </div>
-    }
-}
-else
-{
-    <div class="alert alert-warning mt-3">No results found. Try refining your search.</div>
-}
+
+        <div class="col-md-2">
+            <label class="form-label">Search Category</label>
+            <select class="form-select" @bind="SelectedSearchFiled">
+                <option value="orderNumber">Order Number</option>
+                <option value="policyNumber">Policy Number</option>
+                <option value="propertyAddress">Property Address</option>
+            </select>
+        </div>
+
+        <div class="col-md-2">
+            <label class="form-label">Date Field</label>
+            <select class="form-select" @bind="SelectedDateField">
+                <option disabled selected value="">-- Select Date Field --</option>
+                <option value="ClosingDate">Closing Date</option>
+                <option value="policyDate">Policy Date</option>
+            </select>
+        </div>
+
+        <div class="col-md-2">
+            <label class="form-label">Retention Duration</label>
+            <select class="form-select" @bind="SelectedDuration">
+                <option>&lt; 5 years</option>
+                <option>&gt; 5 years</option>
+                <option>&lt; 7 years</option>
+                <option>&gt; 7 years</option>
+            </select>
+        </div>
+
+        <div class="col-md-2">
+            <label class="form-label">Query</label>
+            <input class="form-control" placeholder="Enter your query here" @bind="request.Query" />
+        </div>
+
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100 me-1" @onclick="RunSearch">Search</button>
+            <button class="btn btn-secondary w-100" @onclick="ClearAll">Clear</button>
+        </div>
+    </div>
+</div>
