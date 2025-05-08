@@ -1,3 +1,171 @@
-@"\b(\d[\w\-]*)\b"
+<div class="container mt-5 p-4 border rounded shadow bg-white" style="max-width: 600px;">
+    <h4 class="text-primary text-center mb-4">Information Governance & Data Retention</h4>
 
-@"\b\d{1,5}\s+[A-Za-z0-9\s]+,\s*[A-Za-z\s]+,\s*[A-Za-z]{2}\s*\d{4,5}\b"
+    <div class="mb-3">
+        <label class="form-label">Application</label>
+        <select class="form-select" @bind="SelectedAppId">
+            <option disabled selected value="">-- Select Application --</option>
+            @foreach (var app in ApplicationList)
+            {
+                <option value="@app">@app</option>
+            }
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Policy Number</label>
+        <input type="text" class="form-control" placeholder="Enter policy number" @bind="PolicyNumber" />
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label">Date Field</label>
+            <select class="form-select" @bind="SelectedDateField">
+                <option disabled selected value="">-- Select Date Field --</option>
+                <option>Order Opening Date</option>
+                <option>Order Closing Date</option>
+                <option>Policy Date</option>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Retention Duration</label>
+            <select class="form-select" @bind="SelectedDuration">
+                <option>&gt; 5 years</option>
+                <option>&lt; 10 years</option>
+                <option>&gt; 7 years</option>
+                <option>&lt; 6 years</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="text-center">
+        <button class="btn btn-primary me-2" @onclick="SearchDocuments">Search</button>
+        <button class="btn btn-outline-secondary" @onclick="ClearSearch">Clear</button>
+    </div>
+</div>
+
+@code {
+    private string SelectedAppId;
+    private string PolicyNumber;
+    private string SelectedDateField;
+    private string SelectedDuration;
+
+    private List<string> ApplicationList = new() { "eClosing", "ePolicy", "eRecording" };
+
+    private void SearchDocuments()
+    {
+        // implement search logic
+    }
+
+    private void ClearSearch()
+    {
+        SelectedAppId = null;
+        PolicyNumber = null;
+        SelectedDateField = null;
+        SelectedDuration = null;
+    }
+}
+
+
+
+
+
+
+
+@if (!string.IsNullOrWhiteSpace(SelectedAppId) || 
+     !string.IsNullOrWhiteSpace(PolicyNumber) || 
+     !string.IsNullOrWhiteSpace(SelectedDateField) || 
+     !string.IsNullOrWhiteSpace(SelectedDuration))
+{
+    <div class="mt-4">
+        <strong>Applied Filters:</strong>
+        <div class="mt-2">
+            @if (!string.IsNullOrWhiteSpace(SelectedAppId))
+            {
+                <span class="badge bg-primary me-2">App: @SelectedAppId</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(PolicyNumber))
+            {
+                <span class="badge bg-info text-dark me-2">Policy#: @PolicyNumber</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(SelectedDateField))
+            {
+                <span class="badge bg-success me-2">Date Field: @SelectedDateField</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(SelectedDuration))
+            {
+                <span class="badge bg-secondary me-2">Duration: @SelectedDuration</span>
+            }
+        </div>
+    </div>
+}
+
+
+@if (HasAnyFilter)
+{
+    <div class="mt-4">
+        <strong>Applied Filters:</strong>
+        <div class="mt-2">
+            @if (!string.IsNullOrWhiteSpace(SelectedAppId))
+            {
+                <span class="badge bg-primary me-2">
+                    App: @SelectedAppId
+                    <button type="button" class="btn-close btn-close-white btn-sm ms-2"
+                            @onclick="() => ClearFilter(nameof(SelectedAppId))" aria-label="Close"></button>
+                </span>
+            }
+            @if (!string.IsNullOrWhiteSpace(PolicyNumber))
+            {
+                <span class="badge bg-info text-dark me-2">
+                    Policy#: @PolicyNumber
+                    <button type="button" class="btn-close btn-sm ms-2"
+                            @onclick="() => ClearFilter(nameof(PolicyNumber))" aria-label="Close"></button>
+                </span>
+            }
+            @if (!string.IsNullOrWhiteSpace(SelectedDateField))
+            {
+                <span class="badge bg-success me-2">
+                    Date Field: @SelectedDateField
+                    <button type="button" class="btn-close btn-close-white btn-sm ms-2"
+                            @onclick="() => ClearFilter(nameof(SelectedDateField))" aria-label="Close"></button>
+                </span>
+            }
+            @if (!string.IsNullOrWhiteSpace(SelectedDuration))
+            {
+                <span class="badge bg-secondary me-2">
+                    Duration: @SelectedDuration
+                    <button type="button" class="btn-close btn-close-white btn-sm ms-2"
+                            @onclick="() => ClearFilter(nameof(SelectedDuration))" aria-label="Close"></button>
+                </span>
+            }
+        </div>
+    </div>
+}
+
+private bool HasAnyFilter => 
+    !string.IsNullOrWhiteSpace(SelectedAppId) ||
+    !string.IsNullOrWhiteSpace(PolicyNumber) ||
+    !string.IsNullOrWhiteSpace(SelectedDateField) ||
+    !string.IsNullOrWhiteSpace(SelectedDuration);
+
+private void ClearFilter(string filterName)
+{
+    switch (filterName)
+    {
+        case nameof(SelectedAppId):
+            SelectedAppId = null;
+            break;
+        case nameof(PolicyNumber):
+            PolicyNumber = null;
+            break;
+        case nameof(SelectedDateField):
+            SelectedDateField = null;
+            break;
+        case nameof(SelectedDuration):
+            SelectedDuration = null;
+            break;
+    }
+}
+
+
+
