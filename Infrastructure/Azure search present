@@ -32,3 +32,10 @@ public static class NormalizationHelper
         return cleaned;
     }
 }
+var doc = new AzureSearchDocument
+{
+    OrderNumber = input.OrderNumber,
+    NormalizedOrderNumber = NormalizationHelper.NormalizeOrderNumber(input.OrderNumber),
+    PropertyAddress = input.PropertyAddress,
+    NormalizedPropertyAddress = NormalizationHelper.NormalizePropertyAddress(input.PropertyAddress)
+};
