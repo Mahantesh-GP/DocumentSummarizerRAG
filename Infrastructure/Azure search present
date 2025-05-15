@@ -1,41 +1,28 @@
-public static class NormalizationHelper
-{
-    public static string NormalizeOrderNumber(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return null;
 
-        // Match patterns like 21-107 and convert to 2021-107
-        var parts = input.Split('-');
-        if (parts.Length == 2 && parts[0].Length == 2)
-        {
-            return $"20{parts[0]}-{parts[1]}";
-        }
+You are an expert assistant for parsing title insurance documents from various sources.
 
-        return input;
-    }
+You will be given content from any of the following documents:
+- Closing Disclosure
+- Lender or Owner Policy
+- E-Closing confirmation
+- Mortgage or Deed of Trust
+- Documents from TitleExpress, GreenFolders, Barrister, etc.
 
-    public static string NormalizePropertyAddress(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-            return null;
+Your task is to extract the following fields ONLY if clearly found in the text. These fields may not appear in every document.
 
-        // Lowercase, remove extra spaces, optional: remove punctuation
-        var cleaned = input.Trim().ToLowerInvariant();
+**Field Definitions:**
+1. **Order Number** – Internal tracking number assigned by the title company (e.g., 2021-105, ORD-12345).
+2. **Policy Number** – Unique ID assigned by the underwriter on the final title insurance policy.
+3. **Closing Date** – The date on which the transaction was finalized and signed.
+4. **Policy Date** – The effective date of the title insurance policy; may be the same or later than the closing date.
 
-        // Optional: Normalize abbreviations (e.g., ct -> court)
-        cleaned = cleaned.Replace(" ct ", " court ")
-                         .Replace(" st ", " street ")
-                         .Replace(" rd ", " road ")
-                         .Replace(" ave ", " avenue ");
+**Instructions:**
+- DO NOT guess or reuse the same value across fields unless it's explicitly stated.
+- If a field is missing, set its value to `null`.
+- Look for exact matches, variations, or common phrasing near each field.
+- Output only the final result in strict JSON format.
 
-        return cleaned;
-    }
-}
-var doc = new AzureSearchDocument
-{
-    OrderNumber = input.OrderNumber,
-    NormalizedOrderNumber = NormalizationHelper.NormalizeOrderNumber(input.OrderNumber),
-    PropertyAddress = input.PropertyAddress,
-    NormalizedPropertyAddress = NormalizationHelper.NormalizePropertyAddress(input.PropertyAddress)
-};
+---
+
+Document Content:
+{MERGED_TEXT_HERE}
