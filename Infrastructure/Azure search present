@@ -34,7 +34,29 @@
     </div>
 </div>
 
-<!-- Row 2 -->
+<!-- Row 2: Party Search -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label class="form-label">First Name</label>
+        <input class="form-control" type="text" @bind="FirstName" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Last Name</label>
+        <input class="form-control" type="text" @bind="LastName" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Role</label>
+        <select class="form-select" @bind="SelectedRole">
+            <option>Select</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Mailing Address</label>
+        <input class="form-control" type="text" @bind="MailingAddress" />
+    </div>
+</div>
+
+<!-- Row 3 -->
 <div class="row mb-3">
     <div class="col-md-3">
         <label class="form-label">Order Number</label>
@@ -63,7 +85,7 @@
     </div>
 </div>
 
-<!-- Row 3: Address Fields -->
+<!-- Row 4: Address Fields -->
 <div class="row mb-3">
     <div class="col-md-3">
         <label class="form-label">Street Line</label>
@@ -95,7 +117,7 @@
     <button class="btn btn-outline-secondary">Clear</button>
 </div>
 
-</div>@code { private string SelectedAppId; private string SelectedDateField; private string SelectedDuration; private string OrderNumber; private string PolicyNumber;
+</div>@code { private string SelectedAppId; private string SelectedDateField; private string SelectedDuration; private string OrderNumber; private string PolicyNumber; private string FirstName; private string LastName; private string SelectedRole; private string MailingAddress;
 
 private List<(string FolderName, string DisplayText)> AppList = new()
 {
