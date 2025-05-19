@@ -1,28 +1,108 @@
 
-You are an expert assistant for parsing title insurance documents from various sources.
+@* Richly styled Blazor UI form for document filtering (Bootstrap based) *@
 
-You will be given content from any of the following documents:
-- Closing Disclosure
-- Lender or Owner Policy
-- E-Closing confirmation
-- Mortgage or Deed of Trust
-- Documents from TitleExpress, GreenFolders, Barrister, etc.
+<div class="container mt-4 p-4 border rounded shadow bg-light">
+    <h5 class="text-primary mb-4">Information Governance & Data Retention</h5><!-- Row 1 -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label class="form-label">State</label>
+        <select class="form-select">
+            <option>Select</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">County</label>
+        <select class="form-select">
+            <option>Select</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Application</label>
+        <select class="form-select" @bind="SelectedAppId">
+            <option disabled selected value>-- Select Application --</option>
+            @foreach (var app in AppList)
+            {
+                <option value="@app.FolderName">@app.DisplayText</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Document Type</label>
+        <select class="form-select">
+            <option>Select</option>
+        </select>
+    </div>
+</div>
 
-Your task is to extract the following fields ONLY if clearly found in the text. These fields may not appear in every document.
+<!-- Row 2 -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label class="form-label">Order Number</label>
+        <input class="form-control" type="text" @bind="OrderNumber" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Policy Number</label>
+        <input class="form-control" type="text" @bind="PolicyNumber" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Date Type</label>
+        <select class="form-select" @bind="SelectedDateField">
+            <option disabled selected value>-- Select Date Field --</option>
+            <option value="policyDate">Policy Date</option>
+            <option value="closingDate">Order Closing Date</option>
+            <option value="openingDate">Order Opening Date</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Retention Duration</label>
+        <select class="form-select" @bind="SelectedDuration">
+            <option disabled selected value>-- Select Duration --</option>
+            <option value="5">&lt; 5 Years</option>
+            <option value="10">&lt; 10 Years</option>
+        </select>
+    </div>
+</div>
 
-**Field Definitions:**
-1. **Order Number** – Internal tracking number assigned by the title company (e.g., 2021-105, ORD-12345).
-2. **Policy Number** – Unique ID assigned by the underwriter on the final title insurance policy.
-3. **Closing Date** – The date on which the transaction was finalized and signed.
-4. **Policy Date** – The effective date of the title insurance policy; may be the same or later than the closing date.
+<!-- Row 3: Address Fields -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label class="form-label">Street Line</label>
+        <input class="form-control" type="text" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">City</label>
+        <input class="form-control" type="text" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">State</label>
+        <input class="form-control" type="text" />
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Zip</label>
+        <input class="form-control" type="text" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Hold Type</label>
+        <select class="form-select">
+            <option>Select</option>
+        </select>
+    </div>
+</div>
 
-**Instructions:**
-- DO NOT guess or reuse the same value across fields unless it's explicitly stated.
-- If a field is missing, set its value to `null`.
-- Look for exact matches, variations, or common phrasing near each field.
-- Output only the final result in strict JSON format.
+<!-- Action Buttons -->
+<div class="d-flex justify-content-end">
+    <button class="btn btn-primary me-2">Search</button>
+    <button class="btn btn-outline-secondary">Clear</button>
+</div>
 
----
+</div>@code { private string SelectedAppId; private string SelectedDateField; private string SelectedDuration; private string OrderNumber; private string PolicyNumber;
 
-Document Content:
-{MERGED_TEXT_HERE}
+private List<(string FolderName, string DisplayText)> AppList = new()
+{
+    ("eclosing", "E-Closing"),
+    ("greenfolder", "GreenFolder"),
+    ("lenderpolicy", "Lender Policy")
+};
+
+}
+
