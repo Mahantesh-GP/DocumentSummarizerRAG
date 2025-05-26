@@ -17,21 +17,24 @@ public class OpenAIAgentService
             new ChatMessage(ChatRole.User, userQuery)
         };
 
-        var functions = new List<FunctionDefinition>
+        var toolCall = new ChatCompletionsFunctionToolDefinition(
+      name: "search_documents",
+      parameters: BinaryData.FromObjectAsJson(new
+      {
+          type = "object",
+          properties = new
+          {
+              query = new { type = "string", description = "What to search for" }
+          },
+          required = new[] { "query" }
+      })
+  );
+
+        var chatOptions = new ChatCompletionsOptions
         {
-            new FunctionDefinition
-            {
-                Name = "search_documents",
-                Description = "Search documents in Azure Cognitive Search",
-                Parameters = BinaryData.FromObjectAsJson(new
-                {
-                    type = "object",
-                    properties = new {
-                        query = new { type = "string", description = "The query to run against Azure Search" }
-                    },
-                    required = new[] { "query" }
-                })
-            }
+            Messages = { ... },
+            Tools = { toolCall }, // instead of Functions
+            ToolChoice = ChatCompletionsToolChoice.Auto
         };
 
         var options = new ChatCompletionsOptions
