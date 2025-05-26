@@ -1,3 +1,16 @@
-@"\b(\d[\w\-]*)\b"
+In Azure AI Search, when you perform a hybrid search combining text and vector queries, the $filter clause is applied after the text and vector searches are executed and their results are merged using Reciprocal Rank Fusion (RRF). This means that filtering occurs on the combined and ranked result set, not during the initial search phases. As a result, documents that are highly relevant in terms of text or vector similarity but do not meet the filter criteria will be excluded from the final results.
 
-@"\b\d{1,5}\s+[A-Za-z0-9\s]+,\s*[A-Za-z\s]+,\s*[A-Za-z]{2}\s*\d{4,5}\b"
+https://learn.microsoft.com/en-us/azure/search/search-filters#how-filters-affect-scoring-and-performance
+
+search.ismatch('2021-105', 'ordernumber') or search.ismatch('2021-105', 'policyNumber')
+
+search.ismatch('NH', 'address') or search.ismatch('New Hampshire', 'address')
+
+
+if (request.SelectedSearchFiled.Equals("orderNumber") || request.SelectedSearchFiled.Equals("policyNumber"))
+{
+    filters.Add($"search.ismatch('{request.Query}', 'ordernumber') or search.ismatch('{request.Query}', 'policyNumber')");
+}
+var safeQuery = request.Query.Replace("'", "''");
+filters.Add($"search.ismatch('{safeQuery}', 'ordernumber') or search.ismatch('{safeQuery}', 'policyNumber')");
+
