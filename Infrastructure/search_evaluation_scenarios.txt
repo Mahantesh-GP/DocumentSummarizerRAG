@@ -1,0 +1,64 @@
+Search Evaluation Scenarios
+
+Scenario 1
+----------
+Query: 3 Comings Court, Exeter, NH 03833
+
+- Text search: Returns 3 documents
+- Vector search: Returns 3 documents
+- Hybrid search: Returns 4 documents
+  - Reason: One additional document includes the address in the PDF title (e.g., "Order 21_461"), where the property address is mentioned as "Comings Ct, Exeter, NH 03833".
+
+Scenario 2
+----------
+Query: Property located at 3 Comings Court, Exeter, NH 03833
+
+- All search types: Return 1 document
+
+Modified Query: 3 Comings Court, Exeter, NH 03833
+- Text search: Returns 4 results
+- Vector search: Returns 1 result
+- Hybrid search: Returns 1 result
+  - Reason: Extra matches in text search arise from partial or fuzzy matches, such as "Comings Ct, Exeter, NH 03833".
+
+Scenario 3
+----------
+Query: 3 Comings Court, Exeter, NH 03833
+
+- Text + Vector search: Return 3 results
+- Hybrid search: Returns 4 results
+
+Modified Query: "Comings" "Exeter", NH 03833
+- All search types: Return 4 results
+
+Scenario 4
+----------
+Query: 139 Durham Point Road, Durham, NH 03824
+
+- Text + Hybrid search: Return 4 results
+- Vector search: Returns 1 result
+
+Modified Query (without NH): 139 Durham Point Road, Durham, 03824
+- All search types: Still return 4 results
+
+Scenario 5
+----------
+Query: Cristin Hepp
+- All search types: Return 3 results
+
+Query: Cristin R Hepp
+- Text search: Returns 1 result
+- Vector + Hybrid search: Return 2 results
+
+Query: Hepp Cristin
+- Text search: Returns 1 result
+- Vector + Hybrid search: Return 2 results
+
+Scenario 6
+----------
+Query: Two addresses combined:
+3 Comings Court, Exeter, NH 03833 and 139 Durham Point Road, Durham, NH 03824
+
+- Text search: Returns 0 results
+- Vector + Hybrid search: Return 2 results
+  - Note: Only one document is returned for each distinct address (one per property).

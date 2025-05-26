@@ -1,0 +1,22 @@
+@page "/search"
+@inject SearchApiClient Api
+
+<h3>Search</h3>
+<input @bind="Query" placeholder="Enter address or order number" />
+<button @onclick="RunQuery">Search</button>
+
+@if (Result != null)
+{
+    <p><b>Summary:</b></p>
+    <p>@Result</p>
+}
+
+@code {
+    string Query = "";
+    string Result;
+
+    async Task RunQuery()
+    {
+        Result = await Api.RunAgenticSearchAsync(Query);
+    }
+}
