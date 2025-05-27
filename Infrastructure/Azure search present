@@ -1,25 +1,50 @@
-var azureAISearchUrl = Environment.GetEnvironmentVariable(EnvVariables.AzureAISearchUrlEnvVar)
-?? throw new ArgumentNullException(nameof(EnvVariables.AzureAISearchUrlEnvVar), "Azure AI Search URL environment variable is not set.");
-var azureAISearchKey = Environment.GetEnvironmentVariable(EnvVariables.AzureAISearchKeyEnvVar)
-?? throw new ArgumentNullException(nameof(EnvVariables.AzureAISearchKeyEnvVar), "Azure AI Search Key environment variable is not set.");
-var indexName = Environment.GetEnvironmentVariable(EnvVariables.IndexName)
-?? throw new ArgumentNullException(nameof(EnvVariables.IndexName), "Index Name environment variable is not set.");
-var embeddingDeploymentName = Environment.GetEnvironmentVariable(EnvVariables.EmbeddingDeploymentName)
-?? throw new ArgumentNullException(nameof(EnvVariables.EmbeddingDeploymentName), "Embedding Deployment Name environment variable is not set.");
-var azureOpenAIUrl = Environment.GetEnvironmentVariable(EnvVariables.AzureOpenAIUrlEnvVar)
-?? throw new ArgumentNullException(nameof(EnvVariables.AzureOpenAIUrlEnvVar), "Azure OpenAI URL environment variable is not set.");
-var azureOpenAIKey = Environment.GetEnvironmentVariable(EnvVariables.AzureOpenAIKeyEnvVar)
-?? throw new ArgumentNullException(nameof(EnvVariables.AzureOpenAIKeyEnvVar), "Azure OpenAI Key environment variable is not set.");
+   {
+"AzureAISearch": {
+"Url": "https://<your-search-url>
+  ",
+  "Key": "<your-search-key>
+    ",
+    "IndexName": "<your-index-name>
+      "
+      },
+      "AzureOpenAI": {
+      "Url": "https://<your-openai-url>
+        ",
+        "Key": "<your-openai-key>
+          ",
+          "EmbeddingDeploymentName": "<your-deployment-name>
+            "
+            }
+            }
 
-_indexClient = new SearchIndexClient(new Uri(azureAISearchUrl), new AzureKeyCredential(azureAISearchKey));
-_indexName = indexName;
+            using Microsoft.Extensions.Configuration;
 
-#pragma warning disable SKEXP0010 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-azureOpenAITextEmbeddingGenerationService = new AzureOpenAITextEmbeddingGenerationService(
-deploymentName: embeddingDeploymentName,
-azureOpenAIUrl,
-azureOpenAIKey
-);
-#pragma warning restore SKEXP0010 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+            public class AzureSearchService
+            {
+            private readonly SearchIndexClient _indexClient;
+            private readonly string _indexName;
+            private readonly AzureOpenAITextEmbeddingGenerationService azureOpenAITextEmbeddingGenerationService;
 
-}
+            public AzureSearchService(IConfiguration configuration)
+            {
+            var searchConfig = configuration.GetSection("AzureAISearch");
+            var openAIConfig = configuration.GetSection("AzureOpenAI");
+
+            _indexClient = new SearchIndexClient(
+            new Uri(searchConfig["Url"]),
+            new AzureKeyCredential(searchConfig["Key"])
+            );
+            _indexName = searchConfig["IndexName"];
+
+            azureOpenAITextEmbeddingGenerationService = new(
+            deploymentName: openAIConfig["EmbeddingDeploymentName"],
+            openAIConfig["Url"],
+            openAIConfig["Key"]
+            );
+            }
+            // ... rest of your code ...
+            }
+
+            builder.Services.AddSingleton<AzureSearchService>();
+   
+            
