@@ -1,57 +1,76 @@
-var TitleSearchAgentPrompt = new PromptTemplate
+public async Task<string> GenerateResponseUsingAgenticRag(string prompt)
 {
-    Name = "TitlePolicySearchAgent",
-    Instructions = @"
-    ## Goal: Help the user search title-related policy documents from Azure Cognitive Search using natural language.
+    // Get relevant documents with metadata
+    var embedding = await azureSearchService.azureOpenAITextEmbeddingGenerationService.GenerateEmbeddingAsync(prompt);
+    var docs = await azureSearchService.VectorSearchAsync(embedding);
 
-    ### Step 1: Understand the Query Intention
+    var context = string.Join("\n", docs.Select(d => d.chunk));
+    var citations = string.Join("\n", docs.Select(d =>
+        $"- [Source: {d.chunk_id}](/{d.FileUrl})"
+    ));
 
-    - Identify if the query is related to:
-        - Order Number (e.g., 2021-105 or 21-105)
-        - Policy Number
-        - Property Address (partial or full, including street, city, state, zip)
-        - Closing Date or Policy Date
-        - Date range filters (e.g., policies older than 10 years)
-    - Determine if the query implies relationship (e.g., all documents related to an order number).
+    // Use context in agent prompt
+    StringBuilder result = new StringBuilder();
+    PromptExecutionSettings settings = new() { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
+    ChatHistory histroy = new ChatHistory();
+    histroy.AddUserMessage($"{prompt}\n\nContext:\n{context}");
+    AgentThread thread = new ChatHistoryAgentThread(histroy);
 
-    ### Step 2: Transform to Search Plan
+    ChatCompletionAgent agent = new()
+    {
+        Name = "TripPlanner",
+        Instructions = @"  
+        Step 1: Plan the Task
 
-    - Based on the identified query type, prepare one or more filters for Azure Search (e.g., search.in(), search.ismatch(), or filter expressions).
-    - For dates, calculate dynamic values (e.g., older than 10 years = date < Today - 10 years).
-    - Normalize values such as `ct` to `court`, and handle numeric formats for order numbers (e.g., 21-105 == 2021-105).
+        Carefully analyze the user query.
 
-    ### Step 3: Retrieve Context from Azure Search
+        - Break it down into clear, manageable sub-steps before taking any action.
 
-    - Construct a hybrid query (vector + text search).
-    - Include semantic filters such as `searchmode=any`, semantic configuration, and keyword synonyms if relevant.
-    - For order number queries, expand search to include all related documents (by same order ID or common metadata).
+        Step 2: Retrieve Relevant Context
 
-    ### Step 4: Validate and Organize the Response
+        Search for and gather all relevant context available within the current conversation and system memory.
 
-    - Ensure response includes:
-        - File Name
-        - Key metadata (Order No, Policy No, Address, Dates)
-        - Optionally a short summary (if present in vector context)
-    - If date filter was applied (e.g., older than 10 years), reflect that explicitly.
-    - Respond only using data from search results — no assumptions.
+        - Ensure the retrieved context directly aligns with the user's request.
 
-    ### Step 5: Communicate Thought Process and Result
+        Step 3: Reflect and Validate
 
-    - Begin response with direct answer.
-    - End with: search type applied, filters used, and how the documents were linked (e.g., via Order Number or Address match).
+        - Pause to critically reflect on the retrieved context and make sure it has temperature mentioned in faranite.
 
-    ### Additional Notes:
-    - You do not have access to external data or APIs.
-    - If user query is too vague (e.g., "old policies"), request clarification or refine based on best match strategy.
-    - Do not hallucinate missing information.
+        Ask yourself: Does this context sufficiently answer the user's question?
 
-    ### Output Format:
-    - Final Answer: [Summarized response]
-    - Steps Taken:
-        - Step 1: [Query category identified]
-        - Step 2: [Search plan created]
-        - Step 3: [Search results retrieved]
-        - Step 4: [Result formatted]
-    - Reasoning: [How filters and documents were determined]
-    "
-};
+        - If gaps are identified, determine whether further search or clarification is required.
+
+        Ensure your reasoning aligns logically with the user intent and context.
+
+        Step 4: Respond Using Context Only
+        - optimize the search query
+        - Construct your response solely using the information found in the provided context and user query.
+        - Do not introduce any outside or assumed knowledge.
+
+        Step 5: Share Stepwise Progress
+        - Communicate progress transparently after completing each major step.
+        - Clearly indicate what has been done and what is next.
+
+        # Output Format
+            - Your response should begin with final answer and end with steps taken, tools invoked and reasoning.
+
+        Note: You don't have access to external information. Answer should be solely on the knowledge in the current context.
+        ",
+        Kernel = kernel,
+        Arguments = new(settings),
+    };
+
+    await foreach (ChatMessageContent response in agent.InvokeAsync(thread))
+    {
+        result.Append(response.Content);
+    }
+
+    // Combine summary and citations
+    var finalResult = new StringBuilder();
+    finalResult.AppendLine("### Summary");
+    finalResult.AppendLine(result.ToString());
+    finalResult.AppendLine("\n### Citations");
+    finalResult.AppendLine(citations);
+
+    return finalResult.ToString();
+}
