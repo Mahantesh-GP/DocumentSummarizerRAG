@@ -1,11 +1,80 @@
-var citations = string.Join("<br/>", docs.Select(d =>
-    $"<a href=\"{d.FileUrl}\" target=\"_blank\">Source: {d.chunk_id}</a>"
-));
+using Azure;
+using Azure.Search.Documents;
+using Azure.Search.Documents.Models;
+using Azure.Storage.Blobs;
+using Azure.Storage.Sas;
+using System.Text;
 
+public class AzureSearchWithSasCitation
+{
+    private readonly string searchEndpoint = "https://<your-search-service>.search.windows.net";
+    private readonly string indexName = "hybrid-search";
+    private readonly string searchApiKey = "<your-api-key>";
+    private readonly string blobConnectionString = "<your-blob-connection-string>";
+    private readonly string blobContainerName = "your-container-name";
 
-var result = new StringBuilder();
-result.AppendLine("<h3>Summary</h3>");
-result.AppendLine(response.ToString());
-result.AppendLine("<h3>Citations</h3>");
-result.AppendLine(citations);
-return result.ToString();
+    public async Task<List<string>> GetFormattedChunksWithSasAsync(string userQuery)
+    {
+        var searchClient = new SearchClient(new Uri(searchEndpoint), indexName, new AzureKeyCredential(searchApiKey));
+        var blobServiceClient = new BlobServiceClient(blobConnectionString);
+
+        var options = new SearchOptions
+        {
+            Size = 5,
+            IncludeTotalCount = true,
+            Select = { "content", "blobPath", "title", "orderNumber", "policyNumber" }
+        };
+        options.SemanticConfigurationName = "default";
+        options.QueryType = SearchQueryType.Semantic;
+
+        var response = await searchClient.SearchAsync<SearchDocument>(userQuery, options);
+        var formattedChunks = new List<string>();
+
+        await foreach (SearchResult<SearchDocument> result in response.Value.GetResultsAsync())
+        {
+            var doc = result.Document;
+            string blobPath = doc["blobPath"]?.ToString();
+            string content = doc["content"]?.ToString();
+            string title = doc.ContainsKey("title") ? doc["title"]?.ToString() : "Document";
+            string orderNumber = doc.ContainsKey("orderNumber") ? doc["orderNumber"]?.ToString() : "";
+            string policyNumber = doc.ContainsKey("policyNumber") ? doc["policyNumber"]?.ToString() : "";
+
+            string sasUrl = GenerateSasUrl(blobServiceClient, blobPath, blobContainerName, 30); // 30 min expiry
+
+            var builder = new StringBuilder();
+            builder.AppendLine($"📄 Source: **{title}**");
+            if (!string.IsNullOrEmpty(orderNumber)) builder.AppendLine($"- Order #: `{orderNumber}`");
+            if (!string.IsNullOrEmpty(policyNumber)) builder.AppendLine($"- Policy #: `{policyNumber}`");
+            builder.AppendLine($"🔗 [View Document]({sasUrl})");
+            builder.AppendLine();
+            builder.AppendLine("---");
+            builder.AppendLine(content);
+
+            formattedChunks.Add(builder.ToString());
+        }
+
+        return formattedChunks;
+    }
+
+    private string GenerateSasUrl(BlobServiceClient blobServiceClient, string blobPath, string containerName, int expiryMinutes)
+    {
+        var containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+        var blobClient = containerClient.GetBlobClient(blobPath);
+
+        if (!blobClient.CanGenerateSasUri)
+            throw new InvalidOperationException("BlobClient is not authorized to generate SAS. Make sure you are using a Shared Key credential.");
+
+        var sasBuilder = new BlobSasBuilder
+        {
+            BlobContainerName = containerName,
+            BlobName = blobPath,
+            Resource = "b",
+            ExpiresOn = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
+        };
+
+        sasBuilder.SetPermissions(BlobSasPermissions.Read);
+
+        Uri sasUri = blobClient.GenerateSasUri(sasBuilder);
+        return sasUri.ToString();
+    }
+}
