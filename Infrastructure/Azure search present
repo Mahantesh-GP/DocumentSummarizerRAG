@@ -25,11 +25,34 @@ public class Citation
     public string url { get; set; }
 }
 
-using System.Text.Json;
 
-var response = await kernel.InvokePromptAsync(prompt);
-var json = response.ToString();
+public async Task<RagResponse> GenerateResponseUsingTraditionalRagJson(string query)
+{
+    string relevangtDocs = await azureSearchService.SearchHotels(query);
 
-RagResponse ragResponse = JsonSerializer.Deserialize<RagResponse>(json);
+    if (string.IsNullOrEmpty(relevangtDocs))
+    {
+        return new RagResponse { summary = "No context found for the user question", citations = new List<Citation>() };
+    }
 
-return JsonSerializer.Serialize(ragResponse);
+    string prompt = $@"
+        You are AI Trip Planner, which helps user for trip planning question based on the context provided.
+        You don't have access to external knowledge, so answer based on the current context. 
+        context : {relevangtDocs}
+        user: {query}
+
+        Respond ONLY in the following JSON format:
+        {{
+            ""summary"": ""<summary of the answer>"",
+            ""citations"": [
+                {{ ""title"": ""<title>"", ""url"": ""<fileUrl>"" }}
+            ]
+        }}
+    ";
+
+    var response = await kernel.InvokePromptAsync(prompt);
+    var json = response.ToString();
+
+    RagResponse ragResponse = JsonSerializer.Deserialize<RagResponse>(json);
+    return ragResponse;
+}
