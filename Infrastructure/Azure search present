@@ -1,163 +1,46 @@
 
-
-using System;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
 using Azure;
-using Azure.Search.Documents;
-using Azure.Search.Documents.Models;
-using Newtonsoft.Json;
+using Azure.Search.Documents.Indexes;
+using Azure.Search.Documents.Indexes.Models;
+using Azure.AI.OpenAI;
+using Azure.Search.Documents.Indexes.Models.Knowledge;
 
-class Program
+var searchEndpoint = new Uri("https://<your-search-service>.search.windows.net");
+var adminKey = new AzureKeyCredential("<your-admin-key>");
+var indexName = "earth_at_night";
+var agentName = "earth-search-agent";
+
+// Create SearchIndexClient
+var indexClient = new SearchIndexClient(searchEndpoint, adminKey);
+
+// Define the Azure OpenAI vectorizer parameters
+var vectorizerParams = new AzureOpenAIVectorizerParameters
 {
-    // Configuration constants
-    private const string SearchEndpoint = "https://YOUR-SEARCH-SERVICE-NAME.search.windows.net";
-    private const string SearchApiKey = "YOUR-SEARCH-ADMIN-KEY";
-    private const string IndexName = "YOUR-INDEX-NAME";
-    private const string AgentName = "my-knowledge-agent";
-    private const string ApiVersion = "2025-05-01-preview";
+    ResourceUrl = "<your-openai-endpoint>", // e.g., https://<your-resource>.openai.azure.com
+    DeploymentName = "<your-openai-deployment>", // e.g., gpt-35-turbo
+    ModelName = "<your-gpt-model>" // e.g., gpt-35-turbo
+};
 
-    static async Task Main(string[] args)
-    {
-        try
-        {
-            // User input for the query
-            Console.WriteLine("Enter your search query (e.g., 'luxury hotels in New York with recent renovations'):");
-            string query = Console.ReadLine();
-
-            // Create SearchClient
-            Uri searchEndpointUri = new Uri(SearchEndpoint);
-            AzureKeyCredential credential = new AzureKeyCredential(SearchApiKey);
-            SearchClient searchClient = new SearchClient(searchEndpointUri, IndexName, credential, new SearchClientOptions
-            {
-                ApiVersion = ApiVersion
-            });
-
-            // Attempt agentic retrieval using SDK (preview feature)
-            await PerformAgenticRetrievalWithSdk(searchClient, query);
-
-            // Fallback: Use REST API if SDK method is unavailable or unstable
-            // Uncomment the line below if PerformAgenticRetrievalWithSdk fails or isn't supported
-            // await PerformAgenticRetrievalWithRestApi(query);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: {ex.Message}");
-        }
-
-        Console.WriteLine("\nPress any key to exit...");
-        Console.ReadKey();
-    }
-
-    static async Task PerformAgenticRetrievalWithSdk(SearchClient searchClient, string query)
-    {
-        try
-        {
-            // Prepare the agentic retrieval request
-            var retrieveOptions = new RetrieveOptions
-            {
-                AgentName = AgentName,
-                Query = query,
-                ConversationHistory = new string[]
-                {
-                    "User: I'm looking for hotels in New York.",
-                    "Assistant: I can help! Are you interested in luxury hotels, budget options, or something else?"
-                }
-            };
-
-            // Execute agentic retrieval
-            Console.WriteLine("\nExecuting agentic retrieval with SDK...");
-            var response = await searchClient.RetrieveAsync(retrieveOptions);
-
-            // Display results
-            DisplayResults(response.Value);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"SDK Error: {ex.Message}");
-            Console.WriteLine("Consider using the REST API approach if the SDK method is not supported.");
-        }
-    }
-
-    static async Task PerformAgenticRetrievalWithRestApi(string query)
-    {
-        try
-        {
-            using (var httpClient = new HttpClient())
-            {
-                // Set up HTTP client with API key
-                httpClient.DefaultRequestHeaders.Add("api-key", SearchApiKey);
-                string url = $"{SearchEndpoint}/indexes/{IndexName}/retrieve?api-version={ApiVersion}";
-
-                // Prepare the request body
-                var requestBody = new
-                {
-                    agentName = AgentName,
-                    query = query,
-                    conversationHistory = new[]
-                    {
-                        "User: I'm looking for hotels in New York.",
-                        "Assistant: I can help! Are you interested in luxury hotels, budget options, or something else?"
-                    }
-                };
-                string jsonBody = JsonConvert.SerializeObject(requestBody);
-                var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-
-                // Send POST request
-                Console.WriteLine("\nExecuting agentic retrieval with REST API...");
-                HttpResponseMessage response = await httpClient.PostAsync(url, content);
-
-                // Check response
-                if (response.IsSuccessStatusCode)
-                {
-                    string responseContent = await response.Content.ReadAsStringAsync();
-                    dynamic result = JsonConvert.DeserializeObject(responseContent);
-                    DisplayResults(result);
-                }
-                else
-                {
-                    Console.WriteLine($"REST API Error: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"REST API Error: {ex.Message}");
-        }
-    }
-
-    static void DisplayResults(dynamic result)
-    {
-        // Display unified result
-        Console.WriteLine("\nUnified Result:");
-        Console.WriteLine(result.content ?? result.Content);
-
-        // Display references
-        Console.WriteLine("\nReferences:");
-        foreach (var reference in result.references ?? result.References)
-        {
-            Console.WriteLine($"- Document ID: {reference.documentId ?? reference.DocumentId}");
-            Console.WriteLine($"  Score: {reference.score ?? reference.Score}");
-            Console.WriteLine($"  Content: {reference.contentSnippet ?? reference.ContentSnippet}");
-        }
-
-        // Display activity log
-        Console.WriteLine("\nActivity Log:");
-        foreach (var activity in result.activities ?? result.Activities)
-        {
-            Console.WriteLine($"- Operation: {activity.operation ?? activity.Operation}");
-            Console.WriteLine($"  Subquery: {activity.subqueryText ?? activity.SubqueryText}");
-            Console.WriteLine($"  Hits: {activity.hitCount ?? activity.HitCount}");
-            Console.WriteLine($"  Execution Time: {activity.executionTime ?? activity.ExecutionTime}");
-        }
-    }
-}
-
-// Placeholder class for RetrieveOptions (adjust based on SDK documentation)
-public class RetrieveOptions
+// Create KnowledgeAgent model using AzureOpenAI
+var knowledgeAgentModel = new KnowledgeAgentAzureOpenAIModel
 {
-    public string AgentName { get; set; }
-    public string Query { get; set; }
-    public string[] ConversationHistory { get; set; }
-}
+    AzureOpenAIParameters = vectorizerParams
+};
+
+// Define target index
+var targetIndex = new KnowledgeAgentTargetIndex(indexName)
+{
+    DefaultRerankerThreshold = 5
+};
+
+// Create the KnowledgeAgent
+var knowledgeAgent = new KnowledgeAgent(agentName)
+{
+    Models = { knowledgeAgentModel },
+    TargetIndexes = { targetIndex }
+};
+
+// Register agent (create or update)
+indexClient.CreateOrUpdateKnowledgeAgent(knowledgeAgent);
+
+Console.WriteLine($"Knowledge agent '{agentName}' created or updated successfully.");
