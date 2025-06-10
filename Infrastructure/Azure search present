@@ -1,60 +1,18 @@
 
-using Azure;
-using Azure.AI.OpenAI;
-using Azure.Identity;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-class Program
+public class RagFile
 {
-    static async Task Main(string[] args)
-    {
-        var azureOpenAiEndpoint = "https://your-resource-name.openai.azure.com/";
-        var azureOpenAiGptDeploymentName = "your-deployment-name";
+    [JsonPropertyName("ref_id")]
+    public int RefId { get; set; }
 
-        var azureClient = new AzureOpenAIClient(
-            new Uri(azureOpenAiEndpoint),
-            new DefaultAzureCredential());
+    [JsonPropertyName("title")]
+    public string Title { get; set; }
 
-        ChatClient chatClient = azureClient.GetChatClient(azureOpenAiGptDeploymentName);
+    [JsonPropertyName("content")]
+    public string Content { get; set; }
+}
 
-        // Instructions
-        var instructions = @"A Q&A agent that can answer questions about the Earth at night.
-Sources have a JSON format with a ref_id that must be cited in the answer.
-If you do not have the answer, respond with 'I don't know.'";
-
-        // Build message list as Dictionary (if coming from JSON or config)
-        var messages = new List<Dictionary<string, string>>
-        {
-            new Dictionary<string, string>
-            {
-                { "role", "system" },
-                { "content", instructions }
-            },
-            new Dictionary<string, string>
-            {
-                { "role", "user" },
-                { "content", "Why are some areas brighter at night in December?" }
-            }
-        };
-
-        // Convert dictionary messages to strongly typed ChatMessage
-        var chatMessages = messages
-            .Select(m => m["role"] switch
-            {
-                "user" => new ChatMessage(ChatRole.User, m["content"]),
-                "assistant" => new ChatMessage(ChatRole.Assistant, m["content"]),
-                "system" => new ChatMessage(ChatRole.System, m["content"]),
-                _ => null
-            })
-            .Where(m => m != null)
-            .ToList();
-
-        // Run chat completion
-        var result = await chatClient.CompleteChatAsync(chatMessages);
-
-        Console.WriteLine($"[ASSISTANT]: {result.Value.Content[0].Text}");
-    }
+public class RagResponse
+{
+    [JsonPropertyName("files")]
+    public List<RagFile> Files { get; set; }
 }
