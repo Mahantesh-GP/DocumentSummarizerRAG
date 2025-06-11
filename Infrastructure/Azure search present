@@ -1,18 +1,133 @@
+// Console app using Azure.AI.Projects SDK to demonstrate threaded agentic retrieval
 
-public class RagFile
+using Azure;
+using Azure.Identity;
+using Azure.AI.Projects;
+using Azure.AI.Projects.Models;
+
+var searchEndpoint = "https://<your-search>.search.windows.net";
+var agentName = "earth-search-agent";
+var credential = new DefaultAzureCredential();
+
+var projectClient = new ProjectClient(new Uri(searchEndpoint), credential);
+
+// Step 1: Create a new thread
+var thread = await projectClient.Threads.CreateThreadAsync();
+string threadId = thread.Value.Id;
+Console.WriteLine($"Created thread ID: {threadId}");
+
+// Step 2: Add user message to thread
+string userMessage = "What is the highest altitude from which the ISS is visible?";
+await projectClient.Threads.CreateMessageAsync(threadId, new CreateMessageOptions("user", userMessage));
+Console.WriteLine("User message added.");
+
+// Step 3: Create a run on the thread
+var runOptions = new CreateRunOptions(agentName)
 {
-    [JsonPropertyName("ref_id")]
-    public int RefId { get; set; }
+    Instructions = "Cite sources using [ref_id] and say 'I don't know' if unsure."
+};
 
-    [JsonPropertyName("title")]
-    public string Title { get; set; }
+var run = await projectClient.Threads.CreateRunAsync(threadId, runOptions);
+string runId = run.Value.Id;
+Console.WriteLine($"Run started with ID: {runId}");
 
-    [JsonPropertyName("content")]
-    public string Content { get; set; }
+// Step 4: Poll for run completion
+while (true)
+{
+    var runStatus = await projectClient.Threads.GetRunAsync(threadId, runId);
+    Console.WriteLine($"Current status: {runStatus.Value.Status}");
+    if (runStatus.Value.Status == ProjectRunStatus.Completed) break;
+    await Task.Delay(1000);
 }
 
-public class RagResponse
+// Step 5: Retrieve all messages in the thread
+var messages = await projectClient.Threads.GetMessagesAsync(threadId);
+foreach (var message in messages.Value)
 {
-    [JsonPropertyName("files")]
-    public List<RagFile> Files { get; set; }
+    Console.WriteLine($"{message.Role}: {message.Content.FirstOrDefault()?.Text}");
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+using Azure;
+using Azure.Identity;
+using Azure.AI.Projects;
+using Azure.AI.Projects.Models;
+
+string projectEndpoint = "<your-search-service-endpoint>"; // e.g., https://<service>.search.windows.net
+string openAiEndpoint = "<your-azure-openai-endpoint>"; // e.g., https://<your-resource>.openai.azure.com
+string deploymentName = "gpt-4o-mini";
+string agentName = "earth-search-agent";
+
+// 1. Create the Projects client
+var projectClient = new ProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
+
+// 2. Define your model reference
+var agentModel = new AzureOpenAIModelResourceReference(openAiEndpoint, deploymentName, deploymentName);
+
+// 3. Define agent instructions
+string instructions = """
+A Q&A agent that can answer questions about the Earth at night.
+Sources have a JSON format with a ref_id that must be cited in the answer using the format [ref_id].
+If you do not have the answer, respond with "I don't know".
+""";
+
+// 4. Create the agent
+var createAgentOptions = new CreateAgentOptions(agentModel, agentName)
+{
+    Instructions = instructions
+};
+
+ProjectAgentResource agent = await projectClient.Agents.CreateAgentAsync(createAgentOptions);
+
+Console.WriteLine($"AI agent '{agentName}' created or updated successfully.");
+
+
+using Azure;
+using Azure.Identity;
+using Azure.AI.Projects;
+using Azure.AI.Projects.Models;
+
+string endpoint = "<your-search-service-endpoint>";  // e.g., https://<service>.search.windows.net
+string agentName = "earth-search-agent";
+string userPrompt = "What is the highest altitude the ISS is visible from?";
+
+var projectClient = new ProjectClient(new Uri(endpoint), new DefaultAzureCredential());
+
+// Prepare the user message
+var messages = new List<ProjectMessage>
+{
+    new ProjectMessage("user", userPrompt)
+};
+
+// Invoke the agent
+ProjectInvocationResponse result = await projectClient.InvokeAsync(agentName, messages);
+
+// Display the response
+foreach (var output in result.Output)
+{
+    Console.WriteLine($"{output.Role}: {output.Content}");
 }
