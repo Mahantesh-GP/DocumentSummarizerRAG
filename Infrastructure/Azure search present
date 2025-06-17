@@ -1,68 +1,7 @@
+<script>
+  window.scrollToBottom = () => {
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  };
+</script>
 
-// Step 1: Build up full chat messages list (system + user)
-var fullMessages = new List<Dictionary<string, string>>
-{
-    new Dictionary<string, string>
-    {
-        { "role", "system" },
-        { "content", instructions }
-    },
-    new Dictionary<string, string>
-    {
-        { "role", "user" },
-        { "content", query }
-    }
-};
-
-// Step 2: Get last 5 messages from previous state (optional if using fullMessages only in current request)
-var recentMessages = fullMessages
-    .Where(m => m["role"] != "system")
-    .TakeLast(5)
-    .ToList();
-
-// Step 3: Build retrieval request using last 5 user/assistant messages
-var retrievalRequest = new KnowledgeAgentRetrievalRequest
-{
-    messages = recentMessages
-        .Select(message => new KnowledgeAgentMessage
-        {
-            role = message["role"],
-            content = new[]
-            {
-                new KnowledgeAgentMessageTextContent
-                {
-                    text = message["content"]
-                }
-            }
-        })
-        .ToList(),
-    TargetIndexParams = new KnowledgeAgentIndexParams
-    {
-        IndexName = _indexName,
-        RerankerThreshold = 1.5f
-    }
-};
-
-// Step 4: Call the retrieval agent
-var retrievalResult = await agentClient.RetrieveAsync(retrievalRequest);
-
-// Step 5: Add fixed formatting instructions to assistant
-fullMessages.Add(new Dictionary<string, string>
-{
-    { "role", "assistant" },
-    { "content", """
-You are a summarization assistant. Always return your response in the following JSON format:
-{
-  "summary": "One-paragraph summary",
-  "keywords": ["keyword1", "keyword2"],
-  "documentReferences": [
-    { "file": "filename", "ref_id": "reference ID" }
-  ]
-}
-Do not include any other text or formatting. Only respond with valid JSON as mentioned.
-""" }
-});
-
-// Step 6: Read and process the final answer
-var finalResponse = retrievalResult.Value.Response[0].Content[0] as KnowledgeAgentMessageTextContent;
-var responseText = finalResponse?.Text ?? "";
+await JS.InvokeVoidAsync("scrollToBottom");
