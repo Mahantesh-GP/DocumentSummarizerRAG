@@ -1,29 +1,14 @@
+var systemMessage = new ChatMessage(ChatRole.System, """
+You are a summarization assistant. Always return your response in the following JSON format:
 
-public static Dictionary<string, string> FlattenJson(string json)
 {
-    var dict = new Dictionary<string, string>();
-    FlattenToken(JToken.Parse(json), dict);
-    return dict;
+  "summary": "<one-paragraph summary>",
+  "keywords": ["<list>", "<of>", "<keywords>"],
+  "documentReferences": [
+    { "file": "<filename1>", "ref_id": "<reference ID>" },
+    ...
+  ]
 }
 
-private static void FlattenToken(JToken token, Dictionary<string, string> dict, string prefix = "")
-{
-    if (token is JObject obj)
-    {
-        foreach (var prop in obj.Properties())
-        {
-            FlattenToken(prop.Value, dict, $"{prefix}{prop.Name}.");
-        }
-    }
-    else if (token is JArray array)
-    {
-        for (int i = 0; i < array.Count; i++)
-        {
-            FlattenToken(array[i], dict, $"{prefix}[{i}].");
-        }
-    }
-    else
-    {
-        dict[prefix.TrimEnd('.')] = token.ToString();
-    }
-}
+Do not include any other text or formatting. Only respond with valid JSON.
+""");
