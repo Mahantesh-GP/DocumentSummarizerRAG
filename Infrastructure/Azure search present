@@ -1,84 +1,68 @@
-private readonly List<ChatMessage> _chatHistory = new();
 
-using Azure.AI.OpenAI;
-using System.Text.Json;
-
-public class AgenticChatService
+// Step 1: Build up full chat messages list (system + user)
+var fullMessages = new List<Dictionary<string, string>>
 {
-    private readonly OpenAIClient _client;
-    private readonly string _deployment;
-    private readonly List<ChatMessage> _chatHistory = new();
-
-    public AgenticChatService(OpenAIClient client, string deployment)
+    new Dictionary<string, string>
     {
-        _client = client;
-        _deployment = deployment;
+        { "role", "system" },
+        { "content", instructions }
+    },
+    new Dictionary<string, string>
+    {
+        { "role", "user" },
+        { "content", query }
     }
+};
 
-    public async Task<string> SendMessageAsync(string userMessage, object retrievalContext)
-    {
-        // Step 1: Add current user message to history
-        _chatHistory.Add(new ChatMessage(ChatRole.User, userMessage));
+// Step 2: Get last 5 messages from previous state (optional if using fullMessages only in current request)
+var recentMessages = fullMessages
+    .Where(m => m["role"] != "system")
+    .TakeLast(5)
+    .ToList();
 
-        // Step 2: Prepare fixed system instruction
-        var systemMessage = new ChatMessage(ChatRole.System, """
-You are an AI assistant using retrieval-augmented generation.
-Use the provided document context to answer the user's message.
-Always respond in the following JSON format:
+// Step 3: Build retrieval request using last 5 user/assistant messages
+var retrievalRequest = new KnowledgeAgentRetrievalRequest
 {
-  "summary": "...",
-  "keywords": ["...", "..."],
-  "references": [
-    { "file": "...", "ref_id": "..." }
+    messages = recentMessages
+        .Select(message => new KnowledgeAgentMessage
+        {
+            role = message["role"],
+            content = new[]
+            {
+                new KnowledgeAgentMessageTextContent
+                {
+                    text = message["content"]
+                }
+            }
+        })
+        .ToList(),
+    TargetIndexParams = new KnowledgeAgentIndexParams
+    {
+        IndexName = _indexName,
+        RerankerThreshold = 1.5f
+    }
+};
+
+// Step 4: Call the retrieval agent
+var retrievalResult = await agentClient.RetrieveAsync(retrievalRequest);
+
+// Step 5: Add fixed formatting instructions to assistant
+fullMessages.Add(new Dictionary<string, string>
+{
+    { "role", "assistant" },
+    { "content", """
+You are a summarization assistant. Always return your response in the following JSON format:
+{
+  "summary": "One-paragraph summary",
+  "keywords": ["keyword1", "keyword2"],
+  "documentReferences": [
+    { "file": "filename", "ref_id": "reference ID" }
   ]
 }
-Do not include markdown or any other formatting.
-""");
+Do not include any other text or formatting. Only respond with valid JSON as mentioned.
+""" }
+});
 
-        // Step 3: Include document retrieval context
-        var contextJson = JsonSerializer.Serialize(retrievalContext, new JsonSerializerOptions
-        {
-            WriteIndented = false,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
-
-        var contextMessage = new ChatMessage(ChatRole.User, $"Context documents:\n{contextJson}");
-
-        // Step 4: Add last 5 relevant chat messages
-        var recentMessages = _chatHistory
-            .Where(msg => msg.Role != ChatRole.System)
-            .TakeLast(5)
-            .ToList();
-
-        // Step 5: Compose chat input
-        var messages = new List<ChatMessage> { systemMessage, contextMessage };
-        messages.AddRange(recentMessages);
-
-        var chatOptions = new ChatCompletionsOptions
-        {
-            Temperature = 0.2f
-        };
-
-        foreach (var msg in messages)
-            chatOptions.Messages.Add(msg);
-
-        // Step 6: Call the assistant
-        var result = await _client.GetChatCompletionsAsync(_deployment, chatOptions);
-        var assistantReply = result.Value.Choices[0].Message.Content?.Trim();
-
-        // Step 7: Add assistant reply to history
-        _chatHistory.Add(new ChatMessage(ChatRole.Assistant, assistantReply));
-
-        return assistantReply;
-    }
-
-    public void ClearHistory()
-    {
-        _chatHistory.Clear();
-    }
-
-    public List<ChatMessage> GetChatHistory()
-    {
-        return _chatHistory;
-    }
-}
+// Step 6: Read and process the final answer
+var finalResponse = retrievalResult.Value.Response[0].Content[0] as KnowledgeAgentMessageTextContent;
+var responseText = finalResponse?.Text ?? "";
