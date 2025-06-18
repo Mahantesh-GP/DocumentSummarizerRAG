@@ -1,61 +1,75 @@
 using System;
 using System.IO;
 using System.Text;
-using ClosedXML.Excel;
 using System.Linq;
-using System.Text.Json;
 
 class Program
 {
     static void Main(string[] args)
     {
-        string excelPath = "input.xlsx";
-        string csvOutput = "cleaned_output.csv";
-        string jsonOutput = "cleaned_output.json";
+        string inputPath = "input.csv";       // Your input CSV
+        string outputPath = "cleaned_output.csv"; // Cleaned output
 
-        var workbook = new XLWorkbook(excelPath);
-        var ws = workbook.Worksheet(1); // First worksheet
+        int expectedColumns = 4;
 
-        var rows = ws.RowsUsed().ToList();
-        var headers = rows[0].Cells().Select(c => c.GetValue<string>()).ToList();
-        int expectedColumns = headers.Count;
+        using var reader = new StreamReader(inputPath);
+        using var writer = new StreamWriter(outputPath, false, Encoding.UTF8);
 
-        var csvBuilder = new StringBuilder();
-        var jsonList = new List<Dictionary<string, string>>();
+        int lineNumber = 0;
 
-        csvBuilder.AppendLine(string.Join(",", headers.Select(EscapeCsv)));
-
-        for (int i = 1; i < rows.Count; i++)
+        while (!reader.EndOfStream)
         {
-            var row = rows[i];
-            var values = row.Cells().Select(c => c.GetValue<string>()).ToList();
+            lineNumber++;
+            var line = reader.ReadLine();
 
-            if (values.Count > expectedColumns)
+            // Split using CSV-safe method
+            var columns = ParseCsvLine(line);
+
+            if (columns.Length > expectedColumns)
             {
-                // Merge extra values into last field
-                var fixedRow = values.Take(expectedColumns - 1).ToList();
-                fixedRow.Add(string.Join(",", values.Skip(expectedColumns - 1)));
-                values = fixedRow;
+                // Keep first 3 columns, merge rest into last
+                var fixedRow = columns.Take(expectedColumns - 1).ToList();
+                var mergedLast = string.Join(",", columns.Skip(expectedColumns - 1));
+                fixedRow.Add(mergedLast);
+
+                writer.WriteLine(string.Join(",", fixedRow.Select(EscapeCsv)));
             }
-
-            // CSV
-            csvBuilder.AppendLine(string.Join(",", values.Select(EscapeCsv)));
-
-            // JSON
-            var obj = new Dictionary<string, string>();
-            for (int j = 0; j < headers.Count; j++)
+            else
             {
-                obj[headers[j]] = (j < values.Count ? values[j] : "");
+                // Write as-is (also escapes values)
+                writer.WriteLine(string.Join(",", columns.Select(EscapeCsv)));
             }
-            jsonList.Add(obj);
         }
 
-        File.WriteAllText(csvOutput, csvBuilder.ToString(), Encoding.UTF8);
-        File.WriteAllText(jsonOutput, JsonSerializer.Serialize(jsonList, new JsonSerializerOptions { WriteIndented = true }));
-
-        Console.WriteLine("✅ CSV and JSON generated successfully.");
+        Console.WriteLine("✅ Cleaned file saved to: " + outputPath);
     }
 
+    // Simple CSV parser respecting quoted commas
+    static string[] ParseCsvLine(string line)
+    {
+        var result = new List<string>();
+        bool inQuotes = false;
+        var current = new StringBuilder();
+
+        foreach (char c in line)
+        {
+            if (c == '"')
+                inQuotes = !inQuotes;
+            else if (c == ',' && !inQuotes)
+            {
+                result.Add(current.ToString());
+                current.Clear();
+            }
+            else
+            {
+                current.Append(c);
+            }
+        }
+        result.Add(current.ToString()); // Add last value
+        return result.ToArray();
+    }
+
+    // Escapes a value if needed
     static string EscapeCsv(string value)
     {
         if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
