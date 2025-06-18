@@ -7,10 +7,8 @@ class Program
 {
     static void Main(string[] args)
     {
-        string inputPath = "input.csv";       // Your input CSV
-        string outputPath = "cleaned_output.csv"; // Cleaned output
-
-        int expectedColumns = 4;
+        string inputPath = "input.csv";
+        string outputPath = "cleaned_output.csv";
 
         using var reader = new StreamReader(inputPath);
         using var writer = new StreamWriter(outputPath, false, Encoding.UTF8);
@@ -19,57 +17,62 @@ class Program
 
         while (!reader.EndOfStream)
         {
-            lineNumber++;
             var line = reader.ReadLine();
+            lineNumber++;
 
-            // Split using CSV-safe method
             var columns = ParseCsvLine(line);
 
-            if (columns.Length > expectedColumns)
+            if (columns.Length < 7)
             {
-                // Keep first 3 columns, merge rest into last
-                var fixedRow = columns.Take(expectedColumns - 1).ToList();
-                var mergedLast = string.Join(",", columns.Skip(expectedColumns - 1));
-                fixedRow.Add(mergedLast);
+                Console.WriteLine($"⚠️ Line {lineNumber}: Expected 7 columns, found {columns.Length}. Skipping.");
+                continue;
+            }
 
-                writer.WriteLine(string.Join(",", fixedRow.Select(EscapeCsv)));
-            }
-            else
+            // Merge column 3 and 4 (index 2 and 3)
+            var merged = columns[2] + " " + columns[3];
+
+            // Build new row:
+            // Keep: 0,1
+            // Add: merged (replaces 2 and 3)
+            // Add: 4,5,6
+            var newRow = new[]
             {
-                // Write as-is (also escapes values)
-                writer.WriteLine(string.Join(",", columns.Select(EscapeCsv)));
-            }
+                columns[0],
+                columns[1],
+                merged,
+                columns[4],
+                columns[5],
+                columns[6]
+            };
+
+            writer.WriteLine(string.Join(",", newRow.Select(EscapeCsv)));
         }
 
-        Console.WriteLine("✅ Cleaned file saved to: " + outputPath);
+        Console.WriteLine("✅ Cleaned CSV written to: " + outputPath);
     }
 
-    // Simple CSV parser respecting quoted commas
     static string[] ParseCsvLine(string line)
     {
-        var result = new List<string>();
+        var result = new System.Collections.Generic.List<string>();
         bool inQuotes = false;
         var current = new StringBuilder();
 
         foreach (char c in line)
         {
-            if (c == '"')
-                inQuotes = !inQuotes;
+            if (c == '"') inQuotes = !inQuotes;
             else if (c == ',' && !inQuotes)
             {
                 result.Add(current.ToString());
                 current.Clear();
             }
             else
-            {
                 current.Append(c);
-            }
         }
-        result.Add(current.ToString()); // Add last value
+
+        result.Add(current.ToString());
         return result.ToArray();
     }
 
-    // Escapes a value if needed
     static string EscapeCsv(string value)
     {
         if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
