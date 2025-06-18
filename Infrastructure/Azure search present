@@ -1,7 +1,68 @@
-<script>
-  window.scrollToBottom = () => {
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-  };
-</script>
+using System;
+using System.IO;
+using System.Text;
+using ClosedXML.Excel;
+using System.Linq;
+using System.Text.Json;
 
-await JS.InvokeVoidAsync("scrollToBottom");
+class Program
+{
+    static void Main(string[] args)
+    {
+        string excelPath = "input.xlsx";
+        string csvOutput = "cleaned_output.csv";
+        string jsonOutput = "cleaned_output.json";
+
+        var workbook = new XLWorkbook(excelPath);
+        var ws = workbook.Worksheet(1); // First worksheet
+
+        var rows = ws.RowsUsed().ToList();
+        var headers = rows[0].Cells().Select(c => c.GetValue<string>()).ToList();
+        int expectedColumns = headers.Count;
+
+        var csvBuilder = new StringBuilder();
+        var jsonList = new List<Dictionary<string, string>>();
+
+        csvBuilder.AppendLine(string.Join(",", headers.Select(EscapeCsv)));
+
+        for (int i = 1; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            var values = row.Cells().Select(c => c.GetValue<string>()).ToList();
+
+            if (values.Count > expectedColumns)
+            {
+                // Merge extra values into last field
+                var fixedRow = values.Take(expectedColumns - 1).ToList();
+                fixedRow.Add(string.Join(",", values.Skip(expectedColumns - 1)));
+                values = fixedRow;
+            }
+
+            // CSV
+            csvBuilder.AppendLine(string.Join(",", values.Select(EscapeCsv)));
+
+            // JSON
+            var obj = new Dictionary<string, string>();
+            for (int j = 0; j < headers.Count; j++)
+            {
+                obj[headers[j]] = (j < values.Count ? values[j] : "");
+            }
+            jsonList.Add(obj);
+        }
+
+        File.WriteAllText(csvOutput, csvBuilder.ToString(), Encoding.UTF8);
+        File.WriteAllText(jsonOutput, JsonSerializer.Serialize(jsonList, new JsonSerializerOptions { WriteIndented = true }));
+
+        Console.WriteLine("✅ CSV and JSON generated successfully.");
+    }
+
+    static string EscapeCsv(string value)
+    {
+        if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
+        {
+            value = value.Replace("\"", "\"\"");
+            return $"\"{value}\"";
+        }
+        return value;
+    }
+}
