@@ -1,6 +1,7 @@
-<div class="flex flex-wrap gap-4 p-2">
+<div style="display: flex; flex-wrap: wrap; gap: 20px; padding: 10px;">
     @foreach (var name in MatchingNames)
     {
         <div>@name</div>
     }
 </div>
+
