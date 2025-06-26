@@ -1,25 +1,31 @@
-using ClosedXML.Excel;
+
+using ExcelDataReader;
 using Newtonsoft.Json;
-using System.Text.Json.Serialization;
+using System.Data;
+using System.Text;
 
-string folderPath = "Excels"; // Folder containing all Excel files
+System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
+string folderPath = "Excels";
 string outputJsonPath = "all-people-documents.json";
-
 List<Person> allPeople = new();
 
-foreach (var file in Directory.GetFiles(folderPath, "*.xlsx"))
+foreach (var file in Directory.GetFiles(folderPath, "*.xls*")) // handles both .xls and .xlsx
 {
-    using var workbook = new XLWorkbook(file);
-    var worksheet = workbook.Worksheet(1);
-    var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // Skip header
+    using var stream = File.Open(file, FileMode.Open, FileAccess.Read);
+    using var reader = ExcelReaderFactory.CreateReader(stream);
+    var result = reader.AsDataSet();
 
-    foreach (var row in rows)
+    var table = result.Tables[0]; // First sheet
+    for (int i = 1; i < table.Rows.Count; i++) // Skip header
     {
-        string fullName = row.Cell(1).GetString();
-        string nickNamesRaw = row.Cell(2).GetString();
-        string address = row.Cell(3).GetString();
+        var row = table.Rows[i];
 
-        List<string> nickNames = nickNamesRaw
+        string fullName = row[0]?.ToString()?.Trim() ?? "";
+        string nickNamesRaw = row[1]?.ToString() ?? "";
+        string address = row[2]?.ToString() ?? "";
+
+        var nickNames = nickNamesRaw
             .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(n => n.Trim())
             .ToList();
@@ -36,7 +42,15 @@ foreach (var file in Directory.GetFiles(folderPath, "*.xlsx"))
     Console.WriteLine($"✅ Processed: {Path.GetFileName(file)}");
 }
 
-// Write all people to single JSON
-var json = JsonConvert.SerializeObject(allPeople, Formatting.Indented);
+// Write to JSON
+string json = JsonConvert.SerializeObject(allPeople, Formatting.Indented);
 File.WriteAllText(outputJsonPath, json);
-Console.WriteLine($"\n✅ All records saved to {outputJsonPath}");
+Console.WriteLine($"\n✅ JSON saved to {outputJsonPath}");
+
+public class Person
+{
+    public string Id { get; set; }
+    public string FullName { get; set; }
+    public List<string> NickNames { get; set; }
+    public string Address { get; set; }
+}
