@@ -1,43 +1,42 @@
-
-using CsvHelper;
-using CsvHelper.Configuration;
-using CsvToJson.Data;
+using ClosedXML.Excel;
 using Newtonsoft.Json;
-using System.Globalization;
+using System.Text.Json.Serialization;
 
-string csvPath = "people.csv";
-string outputJsonPath = "people-documents.json";
+string folderPath = "Excels"; // Folder containing all Excel files
+string outputJsonPath = "all-people-documents.json";
 
-List<Person> people = new();
+List<Person> allPeople = new();
 
-using (var reader = new StreamReader(csvPath))
-using (var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
+foreach (var file in Directory.GetFiles(folderPath, "*.xlsx"))
 {
-    HasHeaderRecord = true
-}))
-{
-    while (csv.Read())
+    using var workbook = new XLWorkbook(file);
+    var worksheet = workbook.Worksheet(1);
+    var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // Skip header
+
+    foreach (var row in rows)
     {
-        var fullName = csv.GetField("FullName");
-        var nickNamesRaw = csv.GetField("NickNames");
-        var address = csv.GetField("Address");
+        string fullName = row.Cell(1).GetString();
+        string nickNamesRaw = row.Cell(2).GetString();
+        string address = row.Cell(3).GetString();
 
-        var nickNames = nickNamesRaw
+        List<string> nickNames = nickNamesRaw
             .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(n => n.Trim())
             .ToList();
 
-        people.Add(new Person
+        allPeople.Add(new Person
         {
+            Id = Guid.NewGuid().ToString(),
             FullName = fullName,
             NickNames = nickNames,
             Address = address
         });
     }
+
+    Console.WriteLine($"✅ Processed: {Path.GetFileName(file)}");
 }
 
-// Serialize to JSON
-string json = JsonConvert.SerializeObject(people, Formatting.Indented);
+// Write all people to single JSON
+var json = JsonConvert.SerializeObject(allPeople, Formatting.Indented);
 File.WriteAllText(outputJsonPath, json);
-
-Console.WriteLine($"✅ JSON output saved to {outputJsonPath}");
+Console.WriteLine($"\n✅ All records saved to {outputJsonPath}");
