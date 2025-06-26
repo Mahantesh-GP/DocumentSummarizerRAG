@@ -1,7 +1,51 @@
-<div style="display: flex; flex-wrap: wrap; gap: 20px; padding: 10px;">
-    @foreach (var name in MatchingNames)
-    {
-        <div>@name</div>
-    }
-</div>
 
+namespace ExcelToJson.Data
+{
+    public class Person
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string FullName { get; set; }
+        public List<string> NickNames { get; set; }
+        public string Address { get; set; }
+    }
+}
+
+using ClosedXML.Excel;
+using ExcelToJson.Data;
+using Newtonsoft.Json;
+
+string excelPath = "people.xlsx";
+string outputJsonPath = "people-documents.json";
+
+List<Person> people = new();
+
+using (var workbook = new XLWorkbook(excelPath))
+{
+    var worksheet = workbook.Worksheet(1); // First sheet
+    var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // Skip header
+
+    foreach (var row in rows)
+    {
+        string fullName = row.Cell(1).GetString();
+        string nickNamesRaw = row.Cell(2).GetString();
+        string address = row.Cell(3).GetString();
+
+        List<string> nickNames = nickNamesRaw
+            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(n => n.Trim())
+            .ToList();
+
+        people.Add(new Person
+        {
+            FullName = fullName,
+            NickNames = nickNames,
+            Address = address
+        });
+    }
+}
+
+// Serialize to JSON
+string json = JsonConvert.SerializeObject(people, Formatting.Indented);
+File.WriteAllText(outputJsonPath, json);
+
+Console.WriteLine($"✅ JSON output saved to {outputJsonPath}");
