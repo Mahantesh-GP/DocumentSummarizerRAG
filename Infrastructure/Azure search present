@@ -1,36 +1,28 @@
 
-namespace ExcelToJson.Data
-{
-    public class Person
-    {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string FullName { get; set; }
-        public List<string> NickNames { get; set; }
-        public string Address { get; set; }
-    }
-}
-
-using ClosedXML.Excel;
-using ExcelToJson.Data;
+using CsvHelper;
+using CsvHelper.Configuration;
+using CsvToJson.Data;
 using Newtonsoft.Json;
+using System.Globalization;
 
-string excelPath = "people.xlsx";
+string csvPath = "people.csv";
 string outputJsonPath = "people-documents.json";
 
 List<Person> people = new();
 
-using (var workbook = new XLWorkbook(excelPath))
+using (var reader = new StreamReader(csvPath))
+using (var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
 {
-    var worksheet = workbook.Worksheet(1); // First sheet
-    var rows = worksheet.RangeUsed().RowsUsed().Skip(1); // Skip header
-
-    foreach (var row in rows)
+    HasHeaderRecord = true
+}))
+{
+    while (csv.Read())
     {
-        string fullName = row.Cell(1).GetString();
-        string nickNamesRaw = row.Cell(2).GetString();
-        string address = row.Cell(3).GetString();
+        var fullName = csv.GetField("FullName");
+        var nickNamesRaw = csv.GetField("NickNames");
+        var address = csv.GetField("Address");
 
-        List<string> nickNames = nickNamesRaw
+        var nickNames = nickNamesRaw
             .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(n => n.Trim())
             .ToList();
