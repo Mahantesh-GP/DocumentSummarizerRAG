@@ -1,56 +1,52 @@
 
-using ExcelDataReader;
-using Newtonsoft.Json;
-using System.Data;
-using System.Text;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
 
-System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-
-string folderPath = "Excels";
-string outputJsonPath = "all-people-documents.json";
-List<Person> allPeople = new();
-
-foreach (var file in Directory.GetFiles(folderPath, "*.xls*")) // handles both .xls and .xlsx
+namespace AgenticContentExtractor
 {
-    using var stream = File.Open(file, FileMode.Open, FileAccess.Read);
-    using var reader = ExcelReaderFactory.CreateReader(stream);
-    var result = reader.AsDataSet();
-
-    var table = result.Tables[0]; // First sheet
-    for (int i = 1; i < table.Rows.Count; i++) // Skip header
+    class Program
     {
-        var row = table.Rows[i];
-
-        string fullName = row[0]?.ToString()?.Trim() ?? "";
-        string nickNamesRaw = row[1]?.ToString() ?? "";
-        string address = row[2]?.ToString() ?? "";
-
-        var nickNames = nickNamesRaw
-            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(n => n.Trim())
-            .ToList();
-
-        allPeople.Add(new Person
+        static void Main(string[] args)
         {
-            Id = Guid.NewGuid().ToString(),
-            FullName = fullName,
-            NickNames = nickNames,
-            Address = address
-        });
+            // Sample LLM/agentic response
+            string content = @"ref_id: 0, title: all-people-documents.json, content: JOHN J SMITH JR 5324
+ref_id: 1, title: all-people-documents.json, content: DAVE THOMAS
+ref_id: 2, title: all-people-documents.json, content: KATHERINE 'KATIE' SMITH";
+
+            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var contentList = new List<string>();
+
+            foreach (var line in lines)
+            {
+                var parts = line.Split(',');
+
+                foreach (var part in parts)
+                {
+                    var keyValue = part.Split(':', 2);
+                    if (keyValue.Length == 2)
+                    {
+                        var key = keyValue[0].Trim();
+                        var value = keyValue[1].Trim();
+
+                        if (key.Equals("content", StringComparison.OrdinalIgnoreCase))
+                        {
+                            contentList.Add(value);
+                        }
+                    }
+                }
+            }
+
+            // Serialize to JSON array
+            string json = JsonSerializer.Serialize(contentList, new JsonSerializerOptions { WriteIndented = true });
+
+            // Print or save to file
+            Console.WriteLine("Extracted Content Values:\n");
+            Console.WriteLine(json);
+
+            File.WriteAllText("OnlyContent.json", json);
+            Console.WriteLine("\nSaved to OnlyContent.json");
+        }
     }
-
-    Console.WriteLine($"✅ Processed: {Path.GetFileName(file)}");
-}
-
-// Write to JSON
-string json = JsonConvert.SerializeObject(allPeople, Formatting.Indented);
-File.WriteAllText(outputJsonPath, json);
-Console.WriteLine($"\n✅ JSON saved to {outputJsonPath}");
-
-public class Person
-{
-    public string Id { get; set; }
-    public string FullName { get; set; }
-    public List<string> NickNames { get; set; }
-    public string Address { get; set; }
 }
