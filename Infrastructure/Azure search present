@@ -4,48 +4,42 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
-namespace AgenticContentExtractor
+namespace ExtractContentOnly
 {
     class Program
     {
         static void Main(string[] args)
         {
-            // Sample LLM/agentic response
-            string content = @"ref_id: 0, title: all-people-documents.json, content: JOHN J SMITH JR 5324
-ref_id: 1, title: all-people-documents.json, content: DAVE THOMAS
-ref_id: 2, title: all-people-documents.json, content: KATHERINE 'KATIE' SMITH";
+            string filePath = "agenticResult.json"; // update with your file name
 
-            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine($"File not found: {filePath}");
+                return;
+            }
+
+            string json = File.ReadAllText(filePath);
+
+            // Deserialize into a list of objects
+            var data = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(json);
+
             var contentList = new List<string>();
 
-            foreach (var line in lines)
+            foreach (var item in data)
             {
-                var parts = line.Split(',');
-
-                foreach (var part in parts)
+                if (item.TryGetValue("content", out var contentElement))
                 {
-                    var keyValue = part.Split(':', 2);
-                    if (keyValue.Length == 2)
-                    {
-                        var key = keyValue[0].Trim();
-                        var value = keyValue[1].Trim();
-
-                        if (key.Equals("content", StringComparison.OrdinalIgnoreCase))
-                        {
-                            contentList.Add(value);
-                        }
-                    }
+                    contentList.Add(contentElement.ToString());
                 }
             }
 
-            // Serialize to JSON array
-            string json = JsonSerializer.Serialize(contentList, new JsonSerializerOptions { WriteIndented = true });
+            // Output as JSON array
+            string outputJson = JsonSerializer.Serialize(contentList, new JsonSerializerOptions { WriteIndented = true });
 
-            // Print or save to file
-            Console.WriteLine("Extracted Content Values:\n");
-            Console.WriteLine(json);
+            Console.WriteLine("Extracted content values:\n");
+            Console.WriteLine(outputJson);
 
-            File.WriteAllText("OnlyContent.json", json);
+            File.WriteAllText("OnlyContent.json", outputJson);
             Console.WriteLine("\nSaved to OnlyContent.json");
         }
     }
