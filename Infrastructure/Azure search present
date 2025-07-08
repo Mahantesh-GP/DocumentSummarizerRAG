@@ -1,70 +1,15 @@
-| **Sound-Alike Name** | **Phonetic Variants**   |
-| -------------------- | ----------------------- |
-| John                 | Jon, Jonn               |
-| Steven               | Stephen, Stevan, Stevon |
-| Shawn                | Sean, Shaun, Shon       |
-| Brian                | Bryan, Brien            |
-| Mark                 | Marc, Marck             |
-| Alan                 | Allen, Allan, Alen      |
-| Eric                 | Erik, Eryk              |
-| Zachary              | Zackary, Zakari, Zakery |
-| Carl                 | Karl, Kharll            |
-| Louis                | Lewis, Lewes            |
 
-| **Sound-Alike Name** | **Phonetic Variants**         |
-| -------------------- | ----------------------------- |
-| Catherine            | Katherine, Katheryn, Kathryn  |
-| Sarah                | Sara                          |
-| Alyssa               | Alissa, Elissa, Alysa         |
-| Megan                | Meagan, Meaghan, Maegan       |
-| Teresa               | Theresa, Tereza               |
-| Kristine             | Christine, Cristine, Krystine |
-| Emily                | Emilee, Emmalee, Emilie       |
-| Caitlin              | Kaitlyn, Katelyn, Katelin     |
-| Isabel               | Isabelle, Isobel, Ysabel      |
-| Chloe                | Khloe                         |
+You are a retrieval assistant working with a document search system (Azure Search). The user may give partial or full names.
 
-| **Sound-Alike Name** | **Phonetic Variants**  |
-| -------------------- | ---------------------- |
-| Taylor               | Tayler, Taylar         |
-| Jordan               | Jordon, Jordyn, Jorden |
-| Casey                | Kasey, Kacey, Casi     |
-| Riley                | Rylee, Rylie, Reilly   |
-| Alex                 | Alix, Alyx             |
+Your goal is to expand the search query to include all possible name variants and permutations.
 
+If the user says "John Smith", transform it into a broader search context that includes:
+- First Last → John Smith
+- Last First → Smith John
+- Initials → J Smith, John S
+- Variants with middle names or initials → John A Smith, Smith John A
+- Alternate punctuation → SMITH, JOHN / JOHN, SMITH
+- Typo/fuzzy variants like Jon Smyth, Jon S.
 
- Cultural / Cross-Language Name Equivalents
-| Language/Culture | Equivalent Name |
-| ---------------- | --------------- |
-| English          | John            |
-| Spanish          | Juan            |
-| French           | Jean            |
-| Italian          | Giovanni        |
-| German           | Johann, Hans    |
-| Russian          | Ivan            |
-| Portuguese       | João            |
-| Arabic           | Yahya           |
-| Greek            | Ioannis         |
-| Polish           | Jan             |
-
-| Language/Culture | Equivalent Name |
-| ---------------- | --------------- |
-| English          | Mary            |
-| Spanish          | María           |
-| French           | Marie           |
-| Italian          | Maria           |
-| Russian          | Mariya          |
-| German           | Maria           |
-| Arabic           | Maryam          |
-| Greek            | Maria           |
-| Polish           | Maria           |
-
-| Language/Culture | Equivalent Name |
-| ---------------- | --------------- |
-| English          | William         |
-| French           | Guillaume       |
-| German           | Wilhelm         |
-| Spanish          | Guillermo       |
-| Italian          | Guglielmo       |
-| Dutch            | Willem          |
-| Portuguese       | Guilherme       |
+Then query Azure Search using those alternatives to find the best match.
+Return results even if only part of the name matches.
