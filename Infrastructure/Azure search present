@@ -1,147 +1,59 @@
- What is Azure AI Search?
-A cloud-based search service from Microsoft that helps users find the right information quickly from large sets of documents — even if the wording is different.
+ Document Preparation
+All documents are stored in Azure Blob Storage.
 
-It’s like having Google Search for your company’s private data (like policies, PDFs, emails, or reports).
+Azure Cognitive Search Indexer is used to automatically read and process these files using built-in OCR and custom skills if needed.
 
-Why is Azure AI Search Important?
-Searching in large data sets is hard when:
+Document types are identified and tagged based on metadata or filename conventions to support targeted downstream processing.
 
-Files are stored in different formats (PDFs, scans, Word)
+2. Prompt-Based LLM Analysis
+Azure Knowledge Agent is integrated to enable natural language querying over indexed documents.
 
-Wording varies (e.g., “home insurance” vs “residential coverage”)
+Custom prompt templates are crafted to extract structured insights from unstructured content.
 
-Data lives in many systems
+Special emphasis on handling name variations (e.g., reversed names, partial names, phonetic matches) using prompt engineering.
 
-Azure AI Search uses AI to understand what you mean, not just the words you typed — so you get more accurate, faster search results.
+LLM queries run in real-time or on demand against the Cognitive Search index.
 
-Session Goal:
-Provide a clear understanding of how Azure AI Search helps:
+3. Key Extraction Aspects
+Extracted fields include names, addresses, dates, document types, and legal attributes.
 
-Make document discovery faster and easier
+Prompts and search strategies are tailored to support fuzzy matching, semantic understanding, and contextual reasoning.
 
-Reduce time spent manually reading files
+Results returned are used for UI display and manual review, enabling users to validate and take action on matched records.
 
-Improve productivity in business processes (e.g., claims, underwriting, audits)
-
-
-COMPONENTS OF SEARCH
-------------------------
-| **Component**                 | **Description (Simple Language)**                                                                   |
-| ----------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Data Source**               | The place where your documents live — like Azure Blob Storage, SharePoint, or SQL databases.        |
-| **Indexer**                   | Automatically reads and pulls content (PDFs, Word docs, etc.) from the data source into the system. |
-| **Skillset (AI)**             | Adds intelligence — extracts text from scanned files, detects language, and enriches data.          |
-| **Index**                     | A searchable version of your content — think of it like a smart table of contents.                  |
-| **Search Service**            | Receives user queries and finds the most relevant results from the index.                           |
-| **Search Client (UI or App)** | The interface where users type their queries and view the search results.                           |
-
-The Skillset uses AI to read scanned documents, find key terms, and extract meaning.
-
-The Search Service supports both keyword search and AI-based semantic search.
-
-Azure AI Search can also return results in ranked order (most relevant first).
-
-It pulls the data in (Indexer),
-
-It teaches itself what’s inside (Skillset),
-
-It organizes it (Index),
-
-It gives you smart answers when you search (Search Service)."
-
------------------------------------------------
-rEAL TIME EXAMPLE
-Let’s imagine a Title Insurance company trying to find all documents related to a specific property address:
-
-❌ Without Azure AI Search:
-Customer Query: “Can you give me all documents related to 15 West Oak Street?”
-
-The analyst manually:
-
-Searches through folders or document systems
-
-Opens each PDF, Word file, or scanned image one-by-one
-
-Tries CTRL+F, but it only works on some formats (not scanned images)
-
-Misses results if address is worded differently (e.g., “15 W. Oak St.”)
-
-🔁 This is slow, incomplete, and prone to human error.
-
-✅ With Azure AI Search:
-The user types: “15 West Oak Street” into the search bar
-
-Azure AI Search:
-
-Scans across all document types (PDF, Word, scanned files)
-
-Matches addresses using semantic understanding and OCR for scanned files
-
-Returns:
-
-Document names
-
-Highlighted snippets where the address appears
-
-Filters for narrowing by date, file type, or customer ID
-
-✅ Result: All documents related to the property are instantly found, no matter where or how the address appears
-
-✅ Saves hours of manual work and ensures nothing gets missed
----------------------------------------------------------------------------
-BENIFITS OF SEARCH
-
-Benefits of Using Azure AI Search
-🔹 Improved Search Accuracy
-Finds the most relevant documents or sections, even if wording or formatting varies (e.g., “ownership transfer” vs “title change”).
-
-🔹 Fast Information Access
-Reduces time spent manually browsing through large sets of files — you get results instantly, across thousands of documents.
-
-🔹 Works Across Document Types
-Supports PDFs, Word files, Excel sheets, and even scanned images — thanks to built-in AI (OCR).
-
-🔹 Smart Filters and Facets
-Allows business users to narrow down results by date, location, document type, or customer ID — just like an e-commerce filter.
-
-🔹 No Manual Tagging Needed
-Uses AI to understand document content — no need for you to label everything manually.
-
-🔹 Scales with Your Data
-Easily handles millions of documents and grows with your business — no performance impact.
-
-🔹 Improves Decision Making
-Gives quick access to key info, so analysts and underwriters can make faster, more confident decisions.
-
-🧠 Line to Say in Your Session:
-“Azure AI Search turns your company’s documents into a searchable, AI-powered knowledge base — with speed, accuracy, and zero manual effort.”
-
------------------------------------------------------------------------------------------------------
+Let me know if you want this written as a script for your presentation, or if you need a fourth section for UI/Review/Action.
 
 
-Where Azure AI Search Works Best
-(Think of “searching and finding inside documents”)
 
-Use Case	Description
-🔍 Title or Legal Document Search	Quickly find clauses or ownership info across scanned PDFs, Word docs, etc.
-🧾 Insurance Policy Lookup	Locate terms like “flood coverage” or “deductibles” across customer policies.
-📚 Knowledge Base Search	Helpdesk agents or BAs search internal manuals or SOPs to assist users.
-📂 Contract Review	Find expiration dates, terms, or specific clauses across contracts.
-🧠 Semantic & Synonym Search	Understand similar terms (e.g., "termination clause" vs "exit clause").
-🗂️ Document Filtering	Search + filter by document type, year, address, customer ID, etc.
 
-✅ Best when you want to find information fast from lots of unstructured documents.
 
-❌ Where Azure AI Search Is NOT the Right Fit Alone
-Limitation	Why?
-❌ Natural Language Answers	Azure AI Search doesn’t generate full-sentence answers — it only shows relevant documents/snippets.
-❌ Complex Reasoning or Comparison	Can't compare two documents or summarize differences (use RAG or LLM instead).
-❌ Conversational Q&A	Not a chatbot — it won't respond in human-like dialog.
-❌ Image or Video Understanding	Doesn’t search inside videos or non-textual images.
-❌ Data Extraction or Summarization	Can't auto-summarize content or extract fields like “price” unless you use a custom pipeline.
 
-❗ These are cases where RAG, Azure OpenAI, or custom AI workflows are better.
 
-🎯 Line to Say in the Session:
-“Use Azure AI Search when you want to find documents or passages fast.
-But if you want the system to think or write answers, you need to combine it with something like RAG or ChatGPT.”
+
+You said:
+Classification we are not using anything. Simply CSV files Stored in blob run indexer for text extract 
+
+
+ChatGPT said:
+Perfect — thanks for the clarification. Here's the final updated content based on your actual architecture (no classification, just CSV/PDFs in blob, indexed via Azure Indexer, and queried via Knowledge Agent):
+
+1. Document Preparation
+All files (e.g., CSV, PDF) are directly uploaded to Azure Blob Storage.
+
+An Azure Cognitive Search Indexer runs on the blob container to extract raw content using built-in text extraction and OCR where needed.
+
+No pre-processing or classification is applied — all documents are processed uniformly.
+
+2. Prompt-Based LLM Analysis
+Azure OpenAI Knowledge Agent is used to query the indexed content using natural language prompts.
+
+Prompts are crafted specifically to handle name variations (e.g., “John Smith”, “Smith John”, initials, or partial matches).
+
+This prompt-based LLM interaction ensures semantic understanding of search queries rather than relying only on exact text match.
+
+3. Key Extraction Aspects
+The agent extracts information like names, addresses, and related metadata based on prompt context.
+
+It supports fuzzy and contextual search, helping retrieve relevant records even when names are in different order or form.
+
+This output is used in the UI layer for displaying search results and allowing users to review document content.
