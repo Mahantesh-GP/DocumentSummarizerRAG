@@ -1,10 +1,9 @@
-Azure AI Search Query Execution (via SDK)
-Uses the .NET Azure.Search.Documents SDK to:
+dotnet new classlib -n AgenticRAG.Skills
+dotnet new classlib -n AgenticRAG.Functions
+dotnet new classlib -n AgenticRAG.Orchestration
 
-Send full-text or semantic search queries.
 
-Optionally enable captions/answers.
 
-Receive top N matches with scoring.
-
-Return only the required fields (e.g., fullname, score, flag).
+dotnet add reference ../AgenticRAG.Orchestration/AgenticRAG.Orchestration.csproj
+dotnet add reference ../AgenticRAG.Skills/AgenticRAG.Skills.csproj
+dotnet add reference ../AgenticRAG.Functions/AgenticRAG.Functions.csproj
