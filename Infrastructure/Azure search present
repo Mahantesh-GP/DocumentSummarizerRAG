@@ -1,50 +1,10 @@
-   {
-"AzureAISearch": {
-"Url": "https://<your-search-url>
-  ",
-  "Key": "<your-search-key>
-    ",
-    "IndexName": "<your-index-name>
-      "
-      },
-      "AzureOpenAI": {
-      "Url": "https://<your-openai-url>
-        ",
-        "Key": "<your-openai-key>
-          ",
-          "EmbeddingDeploymentName": "<your-deployment-name>
-            "
-            }
-            }
+Azure AI Search Query Execution (via SDK)
+Uses the .NET Azure.Search.Documents SDK to:
 
-            using Microsoft.Extensions.Configuration;
+Send full-text or semantic search queries.
 
-            public class AzureSearchService
-            {
-            private readonly SearchIndexClient _indexClient;
-            private readonly string _indexName;
-            private readonly AzureOpenAITextEmbeddingGenerationService azureOpenAITextEmbeddingGenerationService;
+Optionally enable captions/answers.
 
-            public AzureSearchService(IConfiguration configuration)
-            {
-            var searchConfig = configuration.GetSection("AzureAISearch");
-            var openAIConfig = configuration.GetSection("AzureOpenAI");
+Receive top N matches with scoring.
 
-            _indexClient = new SearchIndexClient(
-            new Uri(searchConfig["Url"]),
-            new AzureKeyCredential(searchConfig["Key"])
-            );
-            _indexName = searchConfig["IndexName"];
-
-            azureOpenAITextEmbeddingGenerationService = new(
-            deploymentName: openAIConfig["EmbeddingDeploymentName"],
-            openAIConfig["Url"],
-            openAIConfig["Key"]
-            );
-            }
-            // ... rest of your code ...
-            }
-
-            builder.Services.AddSingleton<AzureSearchService>();
-   
-            
+Return only the required fields (e.g., fullname, score, flag).
