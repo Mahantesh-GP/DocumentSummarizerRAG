@@ -1,64 +1,114 @@
-Search Evaluation Scenarios
+[HttpGet("search")]
+public async Task<IActionResult> SearchDocuments(string query, int page = 1, int pageSize = 10)
+{
+    var searchClient = _searchIndexClient.GetSearchClient("your-index-name");
 
-Scenario 1
-----------
-Query: 3 Comings Court, Exeter, NH 03833
+    var options = new SearchOptions
+    {
+        Size = pageSize,
+        Skip = (page - 1) * pageSize,
+        IncludeTotalCount = true
+    };
 
-- Text search: Returns 3 documents
-- Vector search: Returns 3 documents
-- Hybrid search: Returns 4 documents
-  - Reason: One additional document includes the address in the PDF title (e.g., "Order 21_461"), where the property address is mentioned as "Comings Ct, Exeter, NH 03833".
+    var results = await searchClient.SearchAsync<SearchDocument>(query, options);
 
-Scenario 2
-----------
-Query: Property located at 3 Comings Court, Exeter, NH 03833
+    var docs = new List<SearchDocument>();
+    await foreach (var result in results.Value.GetResultsAsync())
+    {
+        docs.Add(result.Document);
+    }
 
-- All search types: Return 1 document
+    return Ok(new
+    {
+        TotalCount = results.Value.TotalCount,
+        Documents = docs
+    });
+}
 
-Modified Query: 3 Comings Court, Exeter, NH 03833
-- Text search: Returns 4 results
-- Vector search: Returns 1 result
-- Hybrid search: Returns 1 result
-  - Reason: Extra matches in text search arise from partial or fuzzy matches, such as "Comings Ct, Exeter, NH 03833".
 
-Scenario 3
-----------
-Query: 3 Comings Court, Exeter, NH 03833
+---
 
-- Text + Vector search: Return 3 results
-- Hybrid search: Returns 4 results
 
-Modified Query: "Comings" "Exeter", NH 03833
-- All search types: Return 4 results
+@page "/namesearch"
+@inject HttpClient Http
 
-Scenario 4
-----------
-Query: 139 Durham Point Road, Durham, NH 03824
+<h3>Name Search Tool</h3>
 
-- Text + Hybrid search: Return 4 results
-- Vector search: Returns 1 result
+<input @bind="Query" placeholder="Enter name" />
+<button @onclick="Search">Search</button>
 
-Modified Query (without NH): 139 Durham Point Road, Durham, 03824
-- All search types: Still return 4 results
+@if (Results?.Documents != null)
+{
+    <p>Found @Results.TotalCount result(s)</p>
 
-Scenario 5
-----------
-Query: Cristin Hepp
-- All search types: Return 3 results
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var doc in Results.Documents)
+            {
+                <tr>
+                    <td>@(++Counter)</td>
+                    <td>@doc.GetProperty("name").GetString()</td>
+                </tr>
+            }
+        </tbody>
+    </table>
 
-Query: Cristin R Hepp
-- Text search: Returns 1 result
-- Vector + Hybrid search: Return 2 results
+    <button @onclick="PrevPage" disabled="@(_page == 1)">Prev</button>
+    <button @onclick="NextPage" disabled="@((_page * PageSize) >= Results?.TotalCount)">Next</button>
+}
+@code {
+    private string Query = "smith";
+    private SearchResponse Results;
+    private int _page = 1;
+    private int PageSize = 10;
+    private int Counter = 0;
 
-Query: Hepp Cristin
-- Text search: Returns 1 result
-- Vector + Hybrid search: Return 2 results
+    private async Task Search()
+    {
+        Counter = (_page - 1) * PageSize;
 
-Scenario 6
-----------
-Query: Two addresses combined:
-3 Comings Court, Exeter, NH 03833 and 139 Durham Point Road, Durham, NH 03824
+        var response = await Http.GetFromJsonAsync<SearchResponse>($"api/search?query={Query}&page={_page}&pageSize={PageSize}");
+        Results = response;
+    }
 
-- Text search: Returns 0 results
-- Vector + Hybrid search: Return 2 results
-  - Note: Only one document is returned for each distinct address (one per property).
+    private async Task PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+            await Search();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if ((_page * PageSize) < Results.TotalCount)
+        {
+            _page++;
+            await Search();
+        }
+    }
+}
+
+
+-------------
+
+<select @bind="PageSize" @onchange="OnPageSizeChange">
+    <option value="10">10</option>
+    <option value="25">25</option>
+    <option value="50">50</option>
+</select>
+
+@code {
+    private async Task OnPageSizeChange(ChangeEventArgs e)
+    {
+        _page = 1;
+        await Search();
+    }
+}
