@@ -1,9 +1,150 @@
-dotnet new classlib -n AgenticRAG.Skills
-dotnet new classlib -n AgenticRAG.Functions
-dotnet new classlib -n AgenticRAG.Orchestration
+Program.cs
+
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Azure.Search.Documents;
+using Azure;
+
+// Load config from appsettings.json
+var config = AppConfig.Load();
+
+// Set up Semantic Kernel + Azure OpenAI
+var builder = Kernel.CreateBuilder()
+    .AddAzureOpenAIChatCompletion("gpt-4o", config.OpenAI.Endpoint, config.OpenAI.ApiKey);
+var kernel = builder.Build();
+
+// Register NameVariation plugin
+var namePlugin = new NameVariationPlugin();
+kernel.Plugins.AddFromInstance(namePlugin, "Names");
+
+// Register AzureSearch plugin
+var searchClient = AzureSearchClientFactory.Create(config.Search);
+var searchPlugin = new AzureSearchPlugin(searchClient);
+kernel.Plugins.AddFromInstance(searchPlugin, "Search");
+
+// Set up chat and function calling
+var chatService = kernel.GetService<IChatCompletionService>();
+var settings = new OpenAIPromptExecutionSettings
+{
+    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+};
+
+// Run interaction
+var history = new ChatHistory();
+history.AddUserMessage("Find documents for names like 'Smith, John'.");
+
+var response = await chatService.GetChatMessageContentAsync(history, settings, kernel);
+Console.WriteLine("Assistant> " + response.Content);
+
+--------------------------------------------------------------
+Plugins/NameVariationPlugin.cs
+
+using Microsoft.SemanticKernel;
+
+public class NameVariationPlugin
+{
+    [KernelFunction, Description("Generate similar-sounding name variants.")]
+    public async Task<string> GenerateVariantsAsync(string name)
+    {
+        await Task.CompletedTask;
+        return "Smith, Jon; Smyth, John; Smithe, John";
+    }
+}
+
+--------------------------------------
+Plugins/AzureSearchPlugin.cs
+
+using Microsoft.SemanticKernel;
+using Azure.Search.Documents;
+using Azure.Search.Documents.Models;
+using System.Text;
+
+public class AzureSearchPlugin
+{
+    private readonly SearchClient _client;
+
+    public AzureSearchPlugin(SearchClient client)
+    {
+        _client = client;
+    }
+
+    [KernelFunction]
+    public async Task<string> SearchDocumentsAsync(string nameQuery)
+    {
+        var options = new SearchOptions { QueryType = SearchQueryType.Full };
+        options.SearchFields.Add("Name");
+
+        string fuzzyQuery = nameQuery + "~";
+        var results = await _client.SearchAsync<SearchDocument>(fuzzyQuery, options);
+
+        var builder = new StringBuilder();
+        await foreach (var result in results.Value.GetResultsAsync())
+        {
+            builder.AppendLine($"{result.Document["Id"]}: {result.Document["Name"]}");
+        }
+
+        return builder.ToString();
+    }
+}
 
 
 
-dotnet add reference ../AgenticRAG.Orchestration/AgenticRAG.Orchestration.csproj
-dotnet add reference ../AgenticRAG.Skills/AgenticRAG.Skills.csproj
-dotnet add reference ../AgenticRAG.Functions/AgenticRAG.Functions.csproj
+---------------------------------------------------------
+Services/AzureSearchClientFactory.cs
+
+using Azure;
+using Azure.Search.Documents;
+
+public static class AzureSearchClientFactory
+{
+    public static SearchClient Create(SearchSettings config)
+    {
+        return new SearchClient(
+            new Uri(config.Endpoint),
+            config.IndexName,
+            new AzureKeyCredential(config.ApiKey));
+    }
+}
+
+----------------------------
+Models/AppConfig.cs
+
+using System.Text.Json;
+
+public class AppConfig
+{
+    public OpenAISettings OpenAI { get; set; }
+    public SearchSettings Search { get; set; }
+
+    public static AppConfig Load(string path = "appsettings.json") =>
+        JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path));
+}
+
+public class OpenAISettings
+{
+    public string Endpoint { get; set; }
+    public string ApiKey { get; set; }
+}
+
+public class SearchSettings
+{
+    public string Endpoint { get; set; }
+    public string IndexName { get; set; }
+    public string ApiKey { get; set; }
+}
+
+---------------------
+appsettings.json
+{
+  "OpenAI": {
+    "Endpoint": "https://<your-resource>.openai.azure.com/",
+    "ApiKey": "<your-api-key>"
+  },
+  "Search": {
+    "Endpoint": "https://<your-search>.search.windows.net/",
+    "IndexName": "your-index",
+    "ApiKey": "<search-api-key>"
+  }
+}
+
+
