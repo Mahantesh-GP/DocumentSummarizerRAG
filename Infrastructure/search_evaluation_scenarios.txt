@@ -194,3 +194,45 @@ public static class NameEnricherSkill
         return nicknameDict.TryGetValue(name, out var list) ? list : new List<string>();
     }
 }
+
+
+public class EnrichedName
+{
+    public string Name { get; set; }
+    public string PhoneticName { get; set; }
+    public List<string> Nicknames { get; set; }
+    public string NormalizedName { get; set; }
+}
+
+[Function("NameSkill")]
+public static async Task<HttpResponseData> Run(
+    [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req)
+{
+    var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+    var data = JsonSerializer.Deserialize<Dictionary<string, string>>(requestBody);
+    var name = data["name"];
+    var flag = data["individualFlag"];
+
+    var response = req.CreateResponse(HttpStatusCode.OK);
+    response.Headers.Add("Content-Type", "application/json");
+
+    if (flag != "I")
+    {
+        await response.WriteAsJsonAsync(new { name = name });
+        return response;
+    }
+
+    var encoder = new DoubleMetaphone();
+    var normalized = NormalizeName(name);
+    var phonetic = encoder.Encode(normalized);
+    var nicknames = GetNicknames(normalized);
+
+    await response.WriteAsJsonAsync(new
+    {
+        name = name,
+        phoneticName = phonetic,
+        normalizedName = normalized,
+        nicknames = nicknames
+    });
+    return response;
+}
