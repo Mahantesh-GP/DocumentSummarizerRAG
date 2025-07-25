@@ -27,3 +27,281 @@ Invoke-RestMethod -Method PUT `
   -Body $body
 
 Write-Host "✅ Synonym map created"
+
+-----------------------
+
+{
+  "name": "people-index",
+  "fields": [
+    {
+      "name": "id",
+      "type": "Edm.String",
+      "key": true,
+      "searchable": false
+    },
+    {
+      "name": "fullName",
+      "type": "Edm.String",
+      "searchable": true,
+      "analyzer": "name_custom_analyzer"
+    },
+    {
+      "name": "phoneticName",
+      "type": "Edm.String",
+      "searchable": true
+    }
+  ],
+  "analyzers": [
+    {
+      "name": "name_custom_analyzer",
+      "@odata.type": "#Microsoft.Azure.Search.CustomAnalyzer",
+      "tokenizer": "standard_v2",
+      "tokenFilters": [
+        "lowercase",
+        "asciifolding",
+        "name-synonym-filter"
+      ]
+    }
+  ],
+  "tokenFilters": [
+    {
+      "name": "name-synonym-filter",
+      "@odata.type": "#Microsoft.Azure.Search.SynonymTokenFilterV2",
+      "synonymMap": "name-synonyms",
+      "expand": true
+    }
+  ]
+}
+
+
+
+---------------------------
+
+SKILLSET
+{
+  "name": "name-skillset",
+  "skills": [
+    {
+      "@odata.type": "#Microsoft.Skills.Custom.WebApiSkill",
+      "name": "compute-phonetic-name",
+      "uri": "https://<your-function-app>.azurewebsites.net/api/ComputePhoneticName?code=<your-function-key>",
+      "context": "/document",
+      "batchSize": 1,
+      "inputs": [
+        {
+          "name": "fullName",
+          "source": "/document/fullName"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "phoneticName",
+          "targetName": "phoneticName"
+        }
+      ]
+    }
+  ]
+}
+
+
+--------INDEXER
+{
+  "name": "people-indexer",
+  "dataSourceName": "people-datasource",
+  "targetIndexName": "people-index",
+  "skillsetName": "name-skillset",
+  "schedule": {
+    "interval": "PT1H",
+    "startTime": "2024-01-01T00:00:00Z"
+  },
+  "fieldMappings": [
+    {
+      "sourceFieldName": "id",
+      "targetFieldName": "id"
+    },
+    {
+      "sourceFieldName": "fullName",
+      "targetFieldName": "fullName"
+    }
+  ],
+  "outputFieldMappings": [
+    {
+      "sourceFieldName": "/document/phoneticName",
+      "targetFieldName": "phoneticName"
+    }
+  ]
+}
+
+----------------AZURE FUNCTION
+
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+
+public static class ComputePhoneticName
+{
+    [FunctionName("ComputePhoneticName")]
+    public static async Task<IActionResult> Run(
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+        ILogger log)
+    {
+        string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        var input = JsonConvert.DeserializeObject<List<DocumentInput>>(requestBody);
+
+        var results = input.Select(doc => new DocumentOutput
+        {
+            fullName = doc.fullName,
+            phoneticName = Soundex(doc.fullName)
+        }).ToList();
+
+        return new OkObjectResult(results);
+    }
+
+    // Simple Soundex implementation
+    private static string Soundex(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+
+        name = name.ToUpperInvariant();
+
+        var soundex = new List<char> { name[0] };
+
+        var map = new Dictionary<char, char>
+        {
+            {'B','1'},{'F','1'},{'P','1'},{'V','1'},
+            {'C','2'},{'G','2'},{'J','2'},{'K','2'},{'Q','2'},{'S','2'},{'X','2'},{'Z','2'},
+            {'D','3'},{'T','3'},
+            {'L','4'},
+            {'M','5'},{'N','5'},
+            {'R','6'}
+        };
+
+        char prevCode = '\0';
+        for (int i = 1; i < name.Length && soundex.Count < 4; i++)
+        {
+            char c = name[i];
+            if (map.TryGetValue(c, out var code))
+            {
+                if (code != prevCode)
+                {
+                    soundex.Add(code);
+                    prevCode = code;
+                }
+            }
+            else
+            {
+                prevCode = '\0';
+            }
+        }
+
+        while (soundex.Count < 4)
+            soundex.Add('0');
+
+        return new string(soundex.ToArray());
+    }
+
+    public class DocumentInput
+    {
+        public string fullName { get; set; }
+    }
+
+    public class DocumentOutput
+    {
+        public string fullName { get; set; }
+        public string phoneticName { get; set; }
+    }
+}
+-----------------------------
+Install-Package Lucene.Net.Analysis.Phonetic -Version 4.8.0-beta00016
+
+
+using Lucene.Net.Analysis.Phonetic.Language;
+
+public static class PhoneticHelper
+{
+    public static (string primary, string alternate) ComputePhonetic(string input)
+    {
+        var encoder = new DoubleMetaphone();
+        encoder.MaxCodeLen = 4;
+
+        var primary = encoder.DoubleMetaphone(input);
+        var alternate = encoder.DoubleMetaphone(input, true);
+
+        return (primary, alternate);
+    }
+}
+
+
+---------------------------------
+BUILD QUERY
+public static class AzureSearchQueryBuilder
+{
+    public static string BuildQuery(string userInput)
+    {
+        // 1. Fuzzy search
+        var fuzzy = $"{userInput}~";
+
+        // 2. Phonetic keys
+        var (primary, alternate) = PhoneticHelper.ComputePhonetic(userInput);
+
+        // 3. Build combined query
+        var query = $"{fuzzy} OR phonetic_primary:{primary} OR phonetic_alternate:{alternate}";
+
+        return query;
+    }
+}
+
+---------------------------AZURE FUNCTION
+
+dotnet add package Phonix
+
+
+using System;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using System.Net;
+using System.Text.Json;
+using Phonix;
+
+public class PhoneticFunction
+{
+    [Function("ComputePhoneticName")]
+    public HttpResponseData Run(
+        [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequestData req)
+    {
+        var requestBody = new StreamReader(req.Body).ReadToEnd();
+        var data = JsonSerializer.Deserialize<PhoneticRequest>(requestBody);
+
+        var encoder = new DoubleMetaphone();
+
+        var primary = encoder.Encode(data.Name);
+        var alternate = encoder.EncodeAlternate(data.Name);
+
+        var response = req.CreateResponse(HttpStatusCode.OK);
+        response.Headers.Add("Content-Type", "application/json");
+
+        var result = new
+        {
+            name = data.Name,
+            phonetic_primary = primary,
+            phonetic_alternate = alternate
+        };
+
+        response.WriteString(JsonSerializer.Serialize(result));
+        return response;
+    }
+}
+
+public class PhoneticRequest
+{
+    public string Name { get; set; }
+}
+
