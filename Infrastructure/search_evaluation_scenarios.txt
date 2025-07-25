@@ -236,3 +236,20 @@ public static async Task<HttpResponseData> Run(
     });
     return response;
 }
+
+
+public static string NormalizeName(string name) =>
+    name?.Trim().ToLowerInvariant();
+
+public static List<string> GetNicknames(string name)
+{
+    var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["john"] = new() { "jon", "jonny", "jack", "jackie" },
+        ["david"] = new() { "dave", "davie", "davy" },
+        ["michael"] = new() { "mike", "micky" }
+        // Extend this dictionary based on your dataset
+    };
+
+    return map.TryGetValue(name, out var result) ? result : new List<string>();
+}
