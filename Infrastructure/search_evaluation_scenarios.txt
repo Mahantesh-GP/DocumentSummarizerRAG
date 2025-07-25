@@ -1,114 +1,29 @@
-[HttpGet("search")]
-public async Task<IActionResult> SearchDocuments(string query, int page = 1, int pageSize = 10)
-{
-    var searchClient = _searchIndexClient.GetSearchClient("your-index-name");
+# CONFIGURATION
+$searchServiceName = "<your-search-service-name>"
+$apiKey = "<your-admin-api-key>"
+$apiVersion = "2023-07-01"
+$endpoint = "https://$searchServiceName.search.windows.net"
 
-    var options = new SearchOptions
-    {
-        Size = pageSize,
-        Skip = (page - 1) * pageSize,
-        IncludeTotalCount = true
-    };
+# 1. Create Synonym Map
+$body = @{
+    name = "name-synonyms"
+    format = "solr"
+    synonyms = @"
+william, bill
+robert, bob
+john, jack, johnny
+margaret, maggie, meg
+steven, steve
+james, jim, jimmy
+richard, rick, ricky
+joseph, joe
+katherine, kate, kathy
+"@
+} | ConvertTo-Json -Depth 3 -Compress
 
-    var results = await searchClient.SearchAsync<SearchDocument>(query, options);
+Invoke-RestMethod -Method PUT `
+  -Uri "$endpoint/synonymmaps/name-synonyms?api-version=$apiVersion" `
+  -Headers @{ "api-key" = $apiKey; "Content-Type" = "application/json" } `
+  -Body $body
 
-    var docs = new List<SearchDocument>();
-    await foreach (var result in results.Value.GetResultsAsync())
-    {
-        docs.Add(result.Document);
-    }
-
-    return Ok(new
-    {
-        TotalCount = results.Value.TotalCount,
-        Documents = docs
-    });
-}
-
-
----
-
-
-@page "/namesearch"
-@inject HttpClient Http
-
-<h3>Name Search Tool</h3>
-
-<input @bind="Query" placeholder="Enter name" />
-<button @onclick="Search">Search</button>
-
-@if (Results?.Documents != null)
-{
-    <p>Found @Results.TotalCount result(s)</p>
-
-    <table class="table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Name</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var doc in Results.Documents)
-            {
-                <tr>
-                    <td>@(++Counter)</td>
-                    <td>@doc.GetProperty("name").GetString()</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-
-    <button @onclick="PrevPage" disabled="@(_page == 1)">Prev</button>
-    <button @onclick="NextPage" disabled="@((_page * PageSize) >= Results?.TotalCount)">Next</button>
-}
-@code {
-    private string Query = "smith";
-    private SearchResponse Results;
-    private int _page = 1;
-    private int PageSize = 10;
-    private int Counter = 0;
-
-    private async Task Search()
-    {
-        Counter = (_page - 1) * PageSize;
-
-        var response = await Http.GetFromJsonAsync<SearchResponse>($"api/search?query={Query}&page={_page}&pageSize={PageSize}");
-        Results = response;
-    }
-
-    private async Task PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-            await Search();
-        }
-    }
-
-    private async Task NextPage()
-    {
-        if ((_page * PageSize) < Results.TotalCount)
-        {
-            _page++;
-            await Search();
-        }
-    }
-}
-
-
--------------
-
-<select @bind="PageSize" @onchange="OnPageSizeChange">
-    <option value="10">10</option>
-    <option value="25">25</option>
-    <option value="50">50</option>
-</select>
-
-@code {
-    private async Task OnPageSizeChange(ChangeEventArgs e)
-    {
-        _page = 1;
-        await Search();
-    }
-}
+Write-Host "✅ Synonym map created"
