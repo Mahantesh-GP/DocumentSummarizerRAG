@@ -72,3 +72,15 @@ Thomas	Tomás (Spanish), Tomáš (Czech), Tamás (Hungarian), Tom, Tommy
 Joseph	Josef (German), Giuseppe (Italian), José (Spanish), Joosep (Estonian), Joe, Joey
 
 
+string inputName = "William";
+
+string prompt = $@"
+You are a name expert. Return only the most common nicknames for the first name ""{inputName}"". Include diminutives, short forms, and popular variations.
+
+- Only return a list of unique nicknames in comma-separated format.
+- Do NOT explain or include any extra text.
+- Preserve casing (capitalize proper names).
+- Do NOT include the original name unless it is commonly used as a nickname itself.
+- Limit the output to a maximum of 7 nicknames.";
+
+
