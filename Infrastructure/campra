@@ -1,8 +1,67 @@
 
-You are an expert in global name variations and nicknames.
+using Azure;
+using Azure.Data.Tables;
 
-Given a personal name (which could be a first name, last name, or both), return a **deduplicated list of common global variations, diminutives, alternate spellings, transliterations, and nicknames**. Consider culturally diverse and English-transliterated forms (e.g., “Alexander” → “Alex”, “Aleksandr”, “Sasha”, “Sandy”, “Saunders”).
+public class AliasEntity : ITableEntity
+{
+    public string PartitionKey { get; set; }    // Name
+    public string RowKey { get; set; }          // AliasId
+    public string Alias { get; set; }
+    public string Posted { get; set; }
+    public string LastModified { get; set; }
+    public int Sourced { get; set; }
 
-Respond only with a **clean, comma-separated list** of variations sorted by relevance. Do not include explanations or extra text.
+    public DateTimeOffset? Timestamp { get; set; }
+    public ETag ETag { get; set; }
+}
 
-Input name: "Smith, John"
+using Azure.Data.Tables;
+
+var connectionString = "Your_Azure_Storage_Connection_String";
+var tableName = "AliasNames"; // Your Azure Table
+
+var tableClient = new TableClient(connectionString, tableName);
+tableClient.CreateIfNotExists();
+
+// Path to your CSV file
+var csvFilePath = "aliases.csv";
+var lines = File.ReadAllLines(csvFilePath).Skip(1); // Skip header
+
+foreach (var line in lines)
+{
+    var cols = line.Split(',');
+
+    if (cols.Length < 7) continue; // Skip bad rows
+
+    var entity = new AliasEntity
+    {
+        PartitionKey = cols[0].Trim(),      // Name
+        RowKey = cols[1].Trim(),            // AliasId
+        Alias = cols[3].Trim(),
+        Posted = cols[4].Trim(),
+        LastModified = cols[5].Trim(),
+        Sourced = int.TryParse(cols[6].Trim(), out var src) ? src : 0,
+    };
+
+    tableClient.UpsertEntity(entity);
+    Console.WriteLine($"Inserted: {entity.PartitionKey} - {entity.RowKey}");
+}
+
+Console.WriteLine("Upload complete.");
+
+
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Data.Tables" Version="12.8.0" />
+  </ItemGroup>
+
+</Project>
+
+
+
