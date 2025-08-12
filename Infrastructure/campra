@@ -1,2 +1,50 @@
-
-Azure OpenAI Name Search combines the power of Azure AI Search with OpenAI’s advanced language models to make finding names in databases or documents faster and more accurate. By using natural language understanding, the solution can handle partial names, misspellings, and variations — ensuring that users can quickly locate the right records, even with incomplete or incorrect information.
+"fields": [
+  {
+    "name": "fullNamePhonetic",
+    "type": "Edm.String",
+    "searchable": true,
+    "analyzer": "phoneticAnalyzerBeider"
+  },
+  {
+    "name": "fullNameExact",
+    "type": "Edm.String",
+    "searchable": true,
+    "analyzer": "phoneticAnalyzerDouble"
+  }
+],
+"analyzers": [
+  {
+    "@odata.type": "#Microsoft.Azure.Search.CustomAnalyzer",
+    "name": "phoneticAnalyzerBeider",
+    "tokenizer": "standard_v2",
+    "tokenFilters": [
+      "lowercase",
+      "asciifolding",
+      "phoneticFilterBeider"
+    ]
+  },
+  {
+    "@odata.type": "#Microsoft.Azure.Search.CustomAnalyzer",
+    "name": "phoneticAnalyzerDouble",
+    "tokenizer": "standard_v2",
+    "tokenFilters": [
+      "lowercase",
+      "asciifolding",
+      "phoneticFilterDouble"
+    ]
+  }
+],
+"tokenFilters": [
+  {
+    "@odata.type": "#Microsoft.Azure.Search.PhoneticTokenFilter",
+    "name": "phoneticFilterBeider",
+    "encoder": "beiderMorse",
+    "replaceOriginalTokens": false
+  },
+  {
+    "@odata.type": "#Microsoft.Azure.Search.PhoneticTokenFilter",
+    "name": "phoneticFilterDouble",
+    "encoder": "doubleMetaphone",
+    "replaceOriginalTokens": false
+  }
+]
