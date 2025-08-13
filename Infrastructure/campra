@@ -1,50 +1,78 @@
-"fields": [
+
+<div class="flex items-center gap-2">
+  <span><b>Maximum results per page:</b></span>
+
+  <select class="form-select"
+          disabled="@IsLoading"
+          @bind="PageSize"
+          @bind:after="OnPageSizeChanged">
+    @foreach (var size in PageSizeOptions)
+    {
+        <option value="@size">@size</option>
+    }
+  </select>
+
+  @if (IsLoading)
   {
-    "name": "fullNamePhonetic",
-    "type": "Edm.String",
-    "searchable": true,
-    "analyzer": "phoneticAnalyzerBeider"
-  },
-  {
-    "name": "fullNameExact",
-    "type": "Edm.String",
-    "searchable": true,
-    "analyzer": "phoneticAnalyzerDouble"
+      <span>Loading…</span>
   }
-],
-"analyzers": [
-  {
-    "@odata.type": "#Microsoft.Azure.Search.CustomAnalyzer",
-    "name": "phoneticAnalyzerBeider",
-    "tokenizer": "standard_v2",
-    "tokenFilters": [
-      "lowercase",
-      "asciifolding",
-      "phoneticFilterBeider"
-    ]
-  },
-  {
-    "@odata.type": "#Microsoft.Azure.Search.CustomAnalyzer",
-    "name": "phoneticAnalyzerDouble",
-    "tokenizer": "standard_v2",
-    "tokenFilters": [
-      "lowercase",
-      "asciifolding",
-      "phoneticFilterDouble"
-    ]
-  }
-],
-"tokenFilters": [
-  {
-    "@odata.type": "#Microsoft.Azure.Search.PhoneticTokenFilter",
-    "name": "phoneticFilterBeider",
-    "encoder": "beiderMorse",
-    "replaceOriginalTokens": false
-  },
-  {
-    "@odata.type": "#Microsoft.Azure.Search.PhoneticTokenFilter",
-    "name": "phoneticFilterDouble",
-    "encoder": "doubleMetaphone",
-    "replaceOriginalTokens": false
-  }
-]
+</div>
+
+<table class="table">
+  <!-- your rows -->
+</table>
+
+@code {
+    // dropdown values (put 30k in the list and as default)
+    private readonly int[] PageSizeOptions = new[] { 100, 500, 1000, 2000, 5000, 10000, 30000 };
+    private int PageSize { get; set; } = 30000;
+    private int CurrentPage { get; set; } = 1;
+
+    private bool IsLoading;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPageAsync(CurrentPage, PageSize);
+    }
+
+    // fires after the bind updates PageSize
+    private async Task OnPageSizeChanged()
+    {
+        CurrentPage = 1;                 // reset to first page when size changes
+        await LoadPageAsync(CurrentPage, PageSize);
+    }
+
+    private async Task LoadPageAsync(int page, int pageSize)
+    {
+        try
+        {
+            IsLoading = true;
+            StateHasChanged();
+
+            _cts?.Cancel();              // cancel any previous search
+            _cts = new CancellationTokenSource();
+
+            // call your API; example:
+            var result = await SearchService.SearchAsync(new SearchRequest {
+                Query = CurrentQuery,
+                Page = page,
+                PageSize = pageSize
+            }, _cts.Token);
+
+            Rows = result.Items;
+            TotalCount = result.TotalCount;
+        }
+        catch (OperationCanceledException) { /* ignore */ }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // your data
+    private string CurrentQuery = string.Empty;
+    private IEnumerable<RowDto> Rows = Array.Empty<RowDto>();
+    private int TotalCount;
+}
