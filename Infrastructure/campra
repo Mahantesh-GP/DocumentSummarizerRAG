@@ -1,78 +1,30 @@
 
-<div class="flex items-center gap-2">
-  <span><b>Maximum results per page:</b></span>
+<input @bind="SearchText"
+       @onkeydown="HandleKeyDown"
+       placeholder="Type and press Enter" />
 
-  <select class="form-select"
-          disabled="@IsLoading"
-          @bind="PageSize"
-          @bind:after="OnPageSizeChanged">
-    @foreach (var size in PageSizeOptions)
-    {
-        <option value="@size">@size</option>
-    }
-  </select>
-
-  @if (IsLoading)
-  {
-      <span>Loading…</span>
-  }
-</div>
-
-<table class="table">
-  <!-- your rows -->
-</table>
+<button @ref="SearchButton"
+        @onclick="SearchAsync">
+    Search
+</button>
 
 @code {
-    // dropdown values (put 30k in the list and as default)
-    private readonly int[] PageSizeOptions = new[] { 100, 500, 1000, 2000, 5000, 10000, 30000 };
-    private int PageSize { get; set; } = 30000;
-    private int CurrentPage { get; set; } = 1;
+    private string SearchText = string.Empty;
+    private ElementReference SearchButton;
 
-    private bool IsLoading;
-    private CancellationTokenSource? _cts;
-
-    protected override async Task OnInitializedAsync()
+    private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        await LoadPageAsync(CurrentPage, PageSize);
-    }
-
-    // fires after the bind updates PageSize
-    private async Task OnPageSizeChanged()
-    {
-        CurrentPage = 1;                 // reset to first page when size changes
-        await LoadPageAsync(CurrentPage, PageSize);
-    }
-
-    private async Task LoadPageAsync(int page, int pageSize)
-    {
-        try
+        if (e.Key == "Enter")
         {
-            IsLoading = true;
-            StateHasChanged();
-
-            _cts?.Cancel();              // cancel any previous search
-            _cts = new CancellationTokenSource();
-
-            // call your API; example:
-            var result = await SearchService.SearchAsync(new SearchRequest {
-                Query = CurrentQuery,
-                Page = page,
-                PageSize = pageSize
-            }, _cts.Token);
-
-            Rows = result.Items;
-            TotalCount = result.TotalCount;
-        }
-        catch (OperationCanceledException) { /* ignore */ }
-        finally
-        {
-            IsLoading = false;
-            StateHasChanged();
+            // Trigger the button click
+            await SearchAsync();
         }
     }
 
-    // your data
-    private string CurrentQuery = string.Empty;
-    private IEnumerable<RowDto> Rows = Array.Empty<RowDto>();
-    private int TotalCount;
+    private Task SearchAsync()
+    {
+        Console.WriteLine($"Searching for: {SearchText}");
+        // TODO: call your search logic here
+        return Task.CompletedTask;
+    }
 }
