@@ -1,30 +1,211 @@
 
-<input @bind="SearchText"
-       @onkeydown="HandleKeyDown"
-       placeholder="Type and press Enter" />
+window.infiniteScroll = {
+  observe: (selector, dotNetRef) => {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          if (el._busy) return;      // throttle
+          el._busy = true;
+          dotNetRef.invokeMethodAsync('OnSentinelVisible').finally(() => el._busy = false);
+        }
+      });
+    }, { root: null, rootMargin: '300px', threshold: 0 });
+    el._io = io; io.observe(el);
+  },
+  disconnect: (selector) => {
+    const el = document.querySelector(selector);
+    if (el && el._io) { el._io.disconnect(); el._io = null; }
+  }
+};
+wwwroot/index.html → <script src="infiniteScroll.js"></script>
 
-<button @ref="SearchButton"
-        @onclick="SearchAsync">
-    Search
-</button>
+
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<div>
+    <strong>@StatusMessage</strong>
+</div>
+
+@if (Results is not null && Results.Count > 0)
+{
+    <h5>Found (@Results.Count) result(s)</h5>
+
+    <div class="flex-grow-1 overflow-auto" style="max-height:700px;">
+        <table class="table table-striped table-bordered">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Sl.no</th>
+                    <th>Name</th>
+                    <th>Individual Flag</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    var serial = 1;
+                }
+                @foreach (var item in Results)
+                {
+                    <tr>
+                        <td>@serial</td>
+                        <td>@item.Summary</td>
+                        <td>@item.AppID</td>
+                    </tr>
+                    serial++;
+                }
+
+                <!-- Sentinel for infinite scroll -->
+                <tr>
+                    <td colspan="3">
+                        <div id="sentinel" style="height:1px;"></div>
+                        @if (IsLoading) { <em>Loading…</em> }
+                        @if (EndReached) { <em>— end —</em> }
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <span><b>Select maximum results per page: </b></span>
+    <select @onchange="OnPageSizeChange">
+        <option value="100">100</option>
+        <option value="200" selected>200</option>
+        <option value="500">500</option>
+        <option value="1000">1000</option>
+    </select>
+}
 
 @code {
-    private string SearchText = string.Empty;
-    private ElementReference SearchButton;
+    // your existing model
+    public class SearchResult {
+        public string? Summary { get; set; }
+        public string? AppID { get; set; }
+        // ... other fields
+    }
 
-    private async Task HandleKeyDown(KeyboardEventArgs e)
+    // request/response matching your API
+    public class UserQueryRequest {
+        public string? Query { get; set; }
+        public string? SelectedAppId { get; set; }
+        public string? SelectedSearchFiled { get; set; }
+        public string? SelectedDuration { get; set; }
+        public string? SelectedDocumentId { get; set; }
+        public string? SearchType { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+    }
+    public class SearchResponse {
+        public List<SearchResult>? Results { get; set; }
+        public long? TotalCount { get; set; }   // optional
+    }
+
+    // state
+    List<SearchResult> Results = new();
+    string StatusMessage = string.Empty;
+    bool IsLoading = false;
+    bool EndReached = false;
+
+    int _page = 1;
+    int PageSize = 200; // default
+    DotNetObjectReference<Home>? _selfRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (e.Key == "Enter")
+        if (firstRender)
         {
-            // Trigger the button click
-            await SearchAsync();
+            _selfRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("infiniteScroll.observe", "#sentinel", _selfRef);
         }
     }
 
-    private Task SearchAsync()
+    // call this when user hits "Search" (or on load)
+    private async Task RunSearch()
     {
-        Console.WriteLine($"Searching for: {SearchText}");
-        // TODO: call your search logic here
-        return Task.CompletedTask;
+        try
+        {
+            IsLoading = true; EndReached = false; StatusMessage = string.Empty;
+            _page = 1; Results.Clear();
+            await LoadNextPage(); // first page
+        }
+        catch
+        {
+            StatusMessage = "Error while loading results";
+        }
+        finally { IsLoading = false; }
+    }
+
+    // infinite loader: called by IntersectionObserver
+    [JSInvokable]
+    public async Task OnSentinelVisible() => await LoadNextPage();
+
+    private async Task LoadNextPage()
+    {
+        if (IsLoading || EndReached) return;
+
+        IsLoading = true; StateHasChanged();
+
+        var request = new UserQueryRequest
+        {
+            Query = Query,                   // keep your existing bound query string
+            SearchType = "semantic_hybrid",  // your current enum/string
+            SelectedAppId = SelectedAppId,   // keep your filters
+            SelectedSearchFiled = SelectedSearchFiled,
+            SelectedDuration = SelectedDuration,
+            SelectedDocumentId = SelectedDocumentId,
+            Page = _page,
+            PageSize = PageSize
+        };
+
+        var response = await Http.PostAsJsonAsync("api/query", request);
+        if (!response.IsSuccessStatusCode)
+        {
+            StatusMessage = "Error while loading results.";
+            IsLoading = false; StateHasChanged(); return;
+        }
+
+        // Accept either `{ results: [...] }` or `[...]`
+        var payload = await response.Content.ReadFromJsonAsync<SearchResponse>();
+        var newItems = payload?.Results ?? await response.Content.ReadFromJsonAsync<List<SearchResult>>() ?? new();
+
+        if (newItems.Count == 0)
+        {
+            EndReached = true;
+        }
+        else
+        {
+            Results.AddRange(newItems);
+            _page++; // next page on next trigger
+            // mark end if server returned less than requested
+            if (newItems.Count < PageSize) EndReached = true;
+        }
+
+        IsLoading = false; StateHasChanged();
+    }
+
+    private async Task OnPageSizeChange(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var ps))
+        {
+            PageSize = Math.Clamp(ps, 1, 1000); // Azure max page size = 1000
+            await RunSearch(); // reset & reload with new size
+        }
+    }
+
+    // TODO: bind these from your existing form
+    string Query = "";
+    string? SelectedAppId;
+    string? SelectedSearchFiled;
+    string? SelectedDuration;
+    string? SelectedDocumentId;
+
+    public async ValueTask DisposeAsync()
+    {
+        await JS.InvokeVoidAsync("infiniteScroll.disconnect", "#sentinel");
+        _selfRef?.Dispose();
     }
 }
+
+
+
