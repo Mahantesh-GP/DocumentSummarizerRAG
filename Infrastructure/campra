@@ -1,36 +1,44 @@
 
-using Microsoft.OpenApi.Models;
+Got it 👍 You want to prepare bullet points + a short summary for your PMCR (Performance Mid Cycle Review). Since you’re a senior developer, the bullets should highlight technical depth, knowledge sharing, and personal upskilling. Here’s a polished version:
 
-var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "My API",
-        Version = "v1",
-        Description = "Test API deployed to Azure"
-    });
-});
+---
 
-var app = builder.Build();
+Key Contributions (Bullets)
 
-var enableSwagger = app.Configuration.GetValue<bool>("Swagger:Enabled");
-if (app.Environment.IsDevelopment() || enableSwagger)
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API v1");
-        c.RoutePrefix = string.Empty; // optional: show swagger at root "/"
-    });
-}
+Delivered two Proof of Concepts (PoCs) leveraging Azure Cognitive Search:
 
-app.UseHttpsRedirection();
-app.UseAuthorization();
+IGDR PoC – Implemented an indexing pipeline integrating Azure Functions and Azure OpenAI LLM, explored OCR for PDFs, and worked with semantic & vector search.
 
-app.MapControllers();
+Name Search PoC – Deep-dived into Azure Search analyzers, experimented with advanced search techniques, and initially explored Knowledge Agent framework before finalizing on traditional Azure Search.
 
-app.Run();
+
+Built strong expertise in Azure Cognitive Search, covering indexing, analyzers, OCR, semantic search, and vector embeddings.
+
+Conducted knowledge-sharing sessions:
+
+GenAI Tech Discussions (Thursdays) – Delivered technical talks for developers and BAs.
+
+GenAI Tech Bridge (Wednesdays) – Simplified GenAI concepts for Business Analysts.
+
+
+Actively exploring emerging GenAI technologies:
+
+Learning Agentic AI frameworks for real-world applications.
+
+Started ML and Python learning journey to strengthen GenAI and AI-driven solutioning skills.
+
+
+
+
+---
+
+Summary
+
+In the last half-year, I significantly advanced my expertise in Azure Cognitive Search and Generative AI technologies through PoC implementations, hands-on exploration, and deep dives into indexing pipelines, search analyzers, and semantic/vector search. Alongside project work, I contributed to the team’s learning culture by conducting multiple GenAI technical sessions for both developers and business analysts. Additionally, I have proactively started learning Agentic AI frameworks, Machine Learning, and Python to prepare for future GenAI-driven initiatives.
+
+
+---
+
+👉 Do you want me to also make a shorter 3–4 line executive summary that you can paste directly into the PMCR system?
+
