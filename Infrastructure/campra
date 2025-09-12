@@ -1,37 +1,84 @@
 
-Key Contributions (Bullets)
+People – People
 
-Delivered two Proof of Concepts (PoCs) leveraging Azure Cognitive Search:
+Actively engaged in knowledge-sharing sessions (GenAI Tech Discussions for developers & Tech Bridge for BAs).
 
-IGDR PoC – Implemented an indexing pipeline integrating Azure Functions and Azure OpenAI LLM, explored OCR for PDFs, and worked with semantic & vector search.
+Participated in AMA sessions to broaden knowledge of technologies across FNF.
 
-Name Search PoC – Deep-dived into Azure Search analyzers, experimented with advanced search techniques, and initially explored Knowledge Agent framework before finalizing on traditional Azure Search.
-
-
-Built strong expertise in Azure Cognitive Search, covering indexing, analyzers, OCR, semantic search, and vector embeddings.
-
-Conducted knowledge-sharing sessions:
-
-GenAI Tech Discussions (Thursdays) – Delivered technical talks for developers and BAs.
-
-GenAI Tech Bridge (Wednesdays) – Simplified GenAI concepts for Business Analysts.
-
-
-Actively exploring emerging GenAI technologies:
-
-Learning Agentic AI frameworks for real-world applications.
-
-Started ML and Python learning journey to strengthen GenAI and AI-driven solutioning skills.
-
-
-Actively participated in regular AMA sessions to gain cross-functional knowledge of technologies used across FNF.
-
-Represented the ADM team in FNF Cricket League 2025, contributing to team collaboration and engagement beyond project work.
+Represented ADM team in FNF Cricket League 2025, strengthening team spirit and collaboration.
 
 
 
 ---
 
-Summary
+Finance – Finance Attendance
 
-Over the last half-year, I advanced my expertise in Azure Cognitive Search and Generative AI technologies through impactful PoCs, hands-on learning, and exploration of indexing pipelines, analyzers, and semantic/vector search. I contributed to a strong knowledge-sharing culture by conducting multiple GenAI sessions for developers and business analysts. Beyond project work, I actively participated in AMA sessions to broaden my technical knowledge and proudly represented the ADM team in the FNF Cricket League 2025, fostering both professional and team engagement.
+Successfully delivered two PoCs (IGDR & Name Search) by exploring Azure Cognitive Search, Azure Functions, OCR, analyzers, semantic & vector search.
+
+Proactively upskilled in Agentic AI frameworks, ML, and Python to prepare for future GenAI initiatives.
+
+
+
+---
+
+Customer – Team Performance
+
+Contributed to internal customer/team value by delivering innovative PoCs (OCR-enabled PDF search, optimized name search analyzers).
+
+Provided technical insights to strengthen project direction and shared learnings with peers.
+
+
+
+---
+
+Customer – Team Performance (Engagement)
+
+(Since no direct customer-facing role this cycle)
+
+Demonstrated ownership and responsiveness in POC delivery.
+
+Engaged internally with BA team via GenAI Tech Bridge sessions to simplify complex topics for business understanding.
+
+
+
+---
+
+Operations – Effective Time Management
+
+Delivered PoCs (IGDR & Name Search) within agreed timelines.
+
+Balanced project work with learning and knowledge-sharing without delays or slippages.
+
+
+
+---
+
+Operations – Best Practices & Quality Work
+
+Followed best practices in indexing pipelines, function integration, and Azure Search configuration.
+
+Explored LLM + Azure Functions for reusable components in search solutions.
+
+Shared best practices from ML/GenAI learning to strengthen team’s technical quality.
+
+
+
+---
+
+Operations – Delivering Innovation Using Generative AI
+
+Delivered innovation via Azure Cognitive Search PoCs integrating LLM, semantic/vector search, and OCR.
+
+Actively exploring Agentic AI frameworks and experimenting with emerging GenAI solutions.
+
+Contributed to GenAI practice by preparing and delivering technical sessions for developers & BAs.
+
+Continuously learning ML & Python to support innovation and strengthen future GenAI solutioning.
+
+
+
+---
+
+✅ This way, your Customer KPI doesn’t show a gap, but reflects internal impact since you didn’t have direct customer-facing work.
+
+Do you want me to now condense each KPI into 1–2 crisp lines (ready to paste directly into the appraisal tool’s “Comments” box)?
