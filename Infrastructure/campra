@@ -1,133 +1,30 @@
 
-Self Comment (Sample Points)
-
-Successfully delivered two PoCs (IGDR and Name Search) by exploring Azure Cognitive Search, Azure Functions, OCR, semantic & vector search, and analyzers.
-
-Conducted knowledge-sharing sessions (GenAI Tech Discussions for developers and GenAI Tech Bridge for BAs), enabling cross-team and BA learning.
-
-Actively participated in AMA sessions to broaden knowledge of technologies across FNF.
-
-Represented ADM team in FNF Cricket League 2025, contributing to team collaboration and engagement.
-
-Proactively explored Agentic AI frameworks, ML, and Python to strengthen skills for future GenAI initiatives.
-
-Balanced project deliverables, upskilling, and knowledge sharing effectively within timelines.
-
-
-
----
-
-Career Aspiration (Sample Points)
-
-Aspire to become a Technology Architect / GenAI Solution Expert, focusing on AI-powered search, Agentic AI frameworks, and scalable cloud solutions.
-
-Intend to take up end-to-end ownership of complex solution design, including Azure Cognitive Search, GenAI, ML, and Cloud-native architectures.
-
-Aim to mentor and guide team members in adopting new technologies and best practices.
-
-Plan to pursue certifications and advanced learning in AI/ML, Azure, and modern architecture frameworks to continuously strengthen technical expertise.
-
-Long-term aspiration is to contribute to building enterprise-level AI solutions that improve business outcomes and create measurable value.
-
-
-
-
-
-People – People (Retention / Engagement / Mentoring)
-
-Actively participated in AMA sessions to broaden technical knowledge across FNF.
-
-Represented ADM team in FNF Cricket League 2025, strengthening collaboration and team spirit.
-
-Contributed to overall team engagement through participation in extra initiatives beyond project work.
-
-
-
----
-
-People – People (Knowledge Sharing / Collaboration)
-
-Conducted GenAI Tech Discussions (Thursdays) for developers, covering Azure Search, OCR, semantic/vector search.
-
-Delivered GenAI Tech Bridge (Wednesdays) sessions for BAs, simplifying complex AI concepts.
-
-Shared continuous learnings from PoC work (IGDR, Name Search) to upskill peers and enhance knowledge base.
-
-
----
-
-Finance – Finance Attendance
-
-Successfully delivered two PoCs (IGDR & Name Search) by exploring Azure Cognitive Search, Azure Functions, OCR, analyzers, semantic & vector search.
-
-Proactively upskilled in Agentic AI frameworks, ML, and Python to prepare for future GenAI initiatives.
-
-
-
----
-
-Customer – Team Performance
-
-Contributed to internal customer/team value by delivering innovative PoCs (OCR-enabled PDF search, optimized name search analyzers).
-
-Provided technical insights to strengthen project direction and shared learnings with peers.
-
-
-
----
-
-Customer – Team Performance (Engagement)
-
-(Since no direct customer-facing role this cycle)
-
-Demonstrated ownership and responsiveness in POC delivery.
-
-Engaged internally with BA team via GenAI Tech Bridge sessions to simplify complex topics for business understanding.
-
-
-
----
-
-Operations – Effective Time Management
-
-Delivered PoCs (IGDR & Name Search) within agreed timelines.
-
-Balanced project work with learning and knowledge-sharing without delays or slippages.
-
-
-
----
-
-Operations – Best Practices & Quality Work
-
-Followed best practices in indexing pipelines, function integration, and Azure Search configuration.
-
-Explored LLM + Azure Functions for reusable components in search solutions.
-
-Shared best practices from ML/GenAI learning to strengthen team’s technical quality.
-
-
-
----
-
-Operations – Delivering Innovation Using Generative AI
-
-Delivered innovation via Azure Cognitive Search PoCs integrating LLM, semantic/vector search, and OCR.
-
-Actively exploring Agentic AI frameworks and experimenting with emerging GenAI solutions.
-
-Contributed to GenAI practice by preparing and delivering technical sessions for developers & BAs.
-
-Continuously learning ML & Python to support innovation and strengthen future GenAI solutioning.
-
-
-
----
-
-✅ This way, your Customer KPI doesn’t show a gap, but reflects internal impact since you didn’t have direct customer-facing work.
-
-Do you want me to now condense each KPI into 1–2 crisp lines (ready to paste directly into the appraisal tool’s “Comments” box)?
-
-
-
+<th>
+    Score
+    <span data-bs-toggle="tooltip" title="Higher score = more relevant to your search. Scores are relative, not percentages.">
+        <i class="bi bi-info-circle"></i>
+    </span>
+</th>
+
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("initTooltips");
+        }
+    }
+}
+
+
+index.html. 
+<script>
+    window.initTooltips = () => {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+    };
+</script>
 
