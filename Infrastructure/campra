@@ -1,6 +1,175 @@
 
-https://learn.microsoft.com/en-us/azure/search/search-sku-manage-costs?utm_source=chatgpt.com
+User Story 1 – PoC Environment Setup & Architecture
 
-https://learn.microsoft.com/en-us/azure/search/search-capacity-planning?utm_source=chatgpt.com
+Title:
+Setup environment and define architecture for Name Search PoC
 
-https://learn.microsoft.com/en-us/answers/questions/1389510/azure-cognitive-search-pricing?utm_source=chatgpt.com
+Description:
+As a developer, I want to set up the Azure environment and define the high-level architecture for the Name Search PoC so that all components (Azure Search, Azure Function, Blazor UI, Storage) can interact seamlessly.
+
+Acceptance Criteria:
+
+Architecture diagram created and reviewed
+
+Azure Search, Function App, and Storage resources created
+
+Local .NET Core and Blazor projects initialized and integrated
+
+
+Effort: 8 hrs
+
+
+---
+
+User Story 2 – Data Preparation and Ingestion
+
+Title:
+Prepare and ingest name dataset into Azure Cognitive Search
+
+Description:
+As a developer, I want to prepare and ingest the sample dataset of individual and business names into Azure Cognitive Search so that search operations can be validated.
+
+Acceptance Criteria:
+
+Dataset with IndividualFlag column prepared
+
+Blob data source and indexer configured in Azure Search
+
+Index structure with analyzers created and validated
+
+
+Effort: 6 hrs
+
+
+---
+
+User Story 3 – Analyzer Evaluation and Customization
+
+Title:
+Research and implement custom analyzers (phonetic, fuzzy, Beider-Morse, Double Metaphone)
+
+Description:
+As a developer, I want to research and test different analyzer configurations in Azure Cognitive Search so that name variations (spelling, phonetic differences) can be accurately matched.
+
+Acceptance Criteria:
+
+Double Metaphone and Beider-Morse analyzers configured
+
+Query analyzer behavior validated for test cases (e.g., “Steven” → “Stephen”)
+
+Results comparison documented with recommendation
+
+
+Effort: 12 hrs
+
+
+---
+
+User Story 4 – Azure Function Skill for Name Enrichment
+
+Title:
+Create Azure Function skill for conditional name enrichment
+
+Description:
+As a developer, I want to build an Azure Function skill that generates enriched fields (phonetic codes, nicknames) for individual names only, using the IndividualFlag, so that irrelevant business names are excluded.
+
+Acceptance Criteria:
+
+Azure Function skill created and deployed
+
+Logic applies only to IndividualFlag = “I”
+
+Function integrated in Search indexer skillset
+
+Validation with sample data done
+
+
+Effort: 10 hrs
+
+
+---
+
+User Story 5 – SDK-Based Query Logic Implementation
+
+Title:
+Implement .NET SDK logic for dynamic name search queries
+
+Description:
+As a developer, I want to use the Azure.Search.Documents SDK to build dynamic query logic supporting phonetic, fuzzy, and enriched searches so that users can test different search behaviors.
+
+Acceptance Criteria:
+
+Search service implemented using SDK
+
+Dynamic parameters (fuzzy level, analyzer type) supported
+
+Results displayed with relevance score
+
+Backend validated via unit tests
+
+
+Effort: 12 hrs
+
+
+---
+
+User Story 6 – Blazor UI for Search Testing
+
+Title:
+Build a Blazor WebAssembly interface for search experimentation
+
+Description:
+As a user, I want an intuitive Blazor UI to input search names, toggle analyzer modes, and view search scores so that I can visually compare search accuracy.
+
+Acceptance Criteria:
+
+UI components for name input, filters, and flags
+
+Result grid showing search score, matched name, and analyzer used
+
+Tooltip for search score explanation
+
+Integration with backend API validated
+
+
+Effort: 10 hrs
+
+
+---
+
+User Story 7 – Evaluation and Documentation
+
+Title:
+Evaluate and document results for the Name Search PoC
+
+Description:
+As a developer, I want to evaluate the PoC accuracy and document findings so that learnings can be reused in production-grade implementation.
+
+Acceptance Criteria:
+
+Evaluation report comparing analyzers and enrichment outcomes
+
+Summary of accuracy metrics and improvement areas
+
+Documentation uploaded to project wiki or shared folder
+
+
+Effort: 8 hrs
+
+
+---
+
+✅ Summary Table for DevOps View
+
+User Story ID	Title	Effort (hrs)	Status
+
+1	PoC Environment Setup & Architecture	8	Planned
+2	Data Preparation and Ingestion	6	Planned
+3	Analyzer Evaluation and Customization	12	Planned
+4	Azure Function Skill for Name Enrichment	10	Planned
+5	SDK-Based Query Logic Implementation	12	Planned
+6	Blazor UI for Search Testing	10	Planned
+7	Evaluation and Documentation	8	Planned
+
+
+Total Estimated Effort: 66 hrs (~8–9 working days)
