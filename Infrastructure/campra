@@ -21,3 +21,9 @@ Raw data (~1.36 B docs × 1–2 KB) becomes about 10–11 TB of actual index siz
 This means roughly 68 partitions are needed on S1 tier (160 GB each).
 
 The observed cost aligns with this (~$16 K/month for 1 replica or ~$33 K with HA).
+
+
+
+Docs per partition =20,486,000≈20.5" million docs per partition" 
+
+✅ So each S1 partition (160 GB) can hold about 20 million documents when the average per-doc index size is ≈ 8 KB.
