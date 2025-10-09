@@ -1,23 +1,23 @@
-Total Document Count	1,365,563,219 (~1.36 Billion)								
-Average Document Size	0.333 KB per document (≈ 3 docs = 1 KB)								
-Azure Search Tier	S1								
-Storage per Partition	160 GB								
-Price per Search Unit (SU)	$245.28 USD per month (730 hours/month ~ 30.4 days *24 hrs) == $0.335 PER HOUR PER SU								
-Formula	Total SUs = Replicas × Partitions								
-									
-									
-Azure AI Search Capacity and Cost Estimation (S1 Tier)									
-Env	Tier	SUs	Replicas	Partitions	Storage GB (Total)	Est. Max Docs	Fits 1.36B?	Monthly Cost (USD)	Recommendation
-Dev – lean	S1	1	1	1	160	≈503M	No	245.28	Use subset of data for testing
-Dev – full data	S1	3	1	3	480	≈1.51B	Yes (tight)	735.84	Replicates Prod storage; no HA
-Prod – minimum	S1	3	1	3	480	≈1.51B	Yes (tight)	735.84	Meets data fit; single replica
-Prod – recommended (HA)	S1	6	2	3	480	≈1.51B	Yes (tight)	1471.68	HA with 2 replicas
-Prod – safer headroom	S1	4	1	4	640	≈2.01B	Yes	981.12	Extra headroom; no HA
-Prod – safer headroom (HA)	S1	8	2	4	640	≈2.01B	Yes	1962.24	Extra headroom with HA
-									
-									
- Storage requirement for 1.36B docs is ~434 GB, so at least 3 partitions are needed (480 GB total).  For production, 6 SUs (2 replicas × 3 partitions) is recommended for high availability and throughput. Keep 10–20% headroom for index overhead and rebuild operations.  Our 1.36B docs (~434 GB) fit in 3 partitions on S1. That’s 3 SUs minimum (~$736/mo) or 6 SUs (~$1,472/mo) for HA. Because headroom is only ~10%.									
-									
-									
-									
-									
+During our testing, we observed that a single document in Azure AI Search takes about 8.19 KB, even though the raw JSON is much smaller (likely 1–2 KB).
+This is expected because Azure Cognitive Search doesn’t just store the document — it also builds several internal data structures to support full-text and phonetic search.
+
+Azure internally creates:
+
+Inverted indexes (word-to-document mappings) for searchable fields
+
+Column stores for filterable, sortable, and facetable fields
+
+Analyzer outputs (phonetic, n-gram, synonyms, etc.) which multiply token count
+
+Metadata and versioning for index maintenance
+
+So the effective storage overhead is typically 2× to 5× the original document size, depending on schema complexity.
+Since we are using phonetic analyzers and multiple searchable fields, our expansion ratio is around 5×, which explains the ~8 KB per document size we see.
+
+As a result:
+
+Raw data (~1.36 B docs × 1–2 KB) becomes about 10–11 TB of actual index size after analyzer and inverted-index expansion.
+
+This means roughly 68 partitions are needed on S1 tier (160 GB each).
+
+The observed cost aligns with this (~$16 K/month for 1 replica or ~$33 K with HA).
