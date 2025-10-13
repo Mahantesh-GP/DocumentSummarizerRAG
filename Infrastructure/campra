@@ -1,29 +1,43 @@
-During our testing, we observed that a single document in Azure AI Search takes about 8.19 KB, even though the raw JSON is much smaller (likely 1–2 KB).
-This is expected because Azure Cognitive Search doesn’t just store the document — it also builds several internal data structures to support full-text and phonetic search.
 
-Azure internally creates:
-
-Inverted indexes (word-to-document mappings) for searchable fields
-
-Column stores for filterable, sortable, and facetable fields
-
-Analyzer outputs (phonetic, n-gram, synonyms, etc.) which multiply token count
-
-Metadata and versioning for index maintenance
-
-So the effective storage overhead is typically 2× to 5× the original document size, depending on schema complexity.
-Since we are using phonetic analyzers and multiple searchable fields, our expansion ratio is around 5×, which explains the ~8 KB per document size we see.
-
-As a result:
-
-Raw data (~1.36 B docs × 1–2 KB) becomes about 10–11 TB of actual index size after analyzer and inverted-index expansion.
-
-This means roughly 68 partitions are needed on S1 tier (160 GB each).
-
-The observed cost aligns with this (~$16 K/month for 1 replica or ~$33 K with HA).
+Request for Confirmation – Azure Cognitive Search Storage & Tier Sizing for 1.36 Billion Records
 
 
+---
 
-Docs per partition =20,486,000≈20.5" million docs per partition" 
+Email Body:
 
-✅ So each S1 partition (160 GB) can hold about 20 million documents when the average per-doc index size is ≈ 8 KB.
+Hi [Microsoft Support / Azure Architect Team],
+
+We are working on capacity planning for our Azure Cognitive Search production environment and would like to validate our storage and sizing assumptions with Microsoft.
+
+We have approximately 1.36 billion records, and based on our current data structure analysis, we derived the following assumptions:
+
+Average record size (raw SQL data): ~272 bytes (≈ 0.272 KB per record)
+
+Total data volume: ~370 GB (0.272 KB × 1.36 B records)
+
+Azure Search tier considered: S1 (160 GB/partition)
+
+Estimated partitions: ~3 (480 GB total available storage)
+
+Monthly cost per SU (S1): ~$245.28 USD
+
+
+We understand that Azure Cognitive Search internally creates additional storage structures such as inverted indexes, filter/sort/facet columns, and analyzer token data.
+Hence, we’d like to confirm if the raw SQL size (0.272 KB/record) can be used directly for sizing, or whether we should apply an expansion multiplier (2×–5×) to account for indexing overhead.
+
+Additionally, could you please help validate the following for production planning:
+
+1. For our dataset (~1.36 B records ≈ 370 GB raw), would 3 partitions on S1 tier (480 GB) be sufficient after indexing expansion?
+
+
+2. If not, what would be the approximate equivalent configuration or number of partitions on S2 tier (640 GB per partition)?
+
+
+3. Is there any official sizing or index expansion guideline Microsoft recommends for accurate estimation?
+
+
+
+Our goal is to ensure that our capacity and cost planning are aligned with Microsoft’s best practices for large-scale indexing scenarios.
+
+Thank you in advance for your assistance and clarification.
