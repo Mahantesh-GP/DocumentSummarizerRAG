@@ -1,43 +1,80 @@
-
-Request for Confirmation – Azure Cognitive Search Storage & Tier Sizing for 1.36 Billion Records
-
-
----
-
-Email Body:
-
-Hi [Microsoft Support / Azure Architect Team],
-
-We are working on capacity planning for our Azure Cognitive Search production environment and would like to validate our storage and sizing assumptions with Microsoft.
-
-We have approximately 1.36 billion records, and based on our current data structure analysis, we derived the following assumptions:
-
-Average record size (raw SQL data): ~272 bytes (≈ 0.272 KB per record)
-
-Total data volume: ~370 GB (0.272 KB × 1.36 B records)
-
-Azure Search tier considered: S1 (160 GB/partition)
-
-Estimated partitions: ~3 (480 GB total available storage)
-
-Monthly cost per SU (S1): ~$245.28 USD
+How billing works
+•	It’s billed by RAM size + storage + region.
+•	On Azure Marketplace, you choose a plan like:
+o	2 GB RAM / 48 GB storage (~$16/mo for dev)
+o	16 GB RAM / 480 GB storage (~$120–200/mo for small prod)
+o	Scales linearly as you increase node size or replicas.
+So you only pay for the compute/storage—no separate Azure VMs, no manual scaling.
 
 
-We understand that Azure Cognitive Search internally creates additional storage structures such as inverted indexes, filter/sort/facet columns, and analyzer token data.
-Hence, we’d like to confirm if the raw SQL size (0.272 KB/record) can be used directly for sizing, or whether we should apply an expansion multiplier (2×–5×) to account for indexing overhead.
-
-Additionally, could you please help validate the following for production planning:
-
-1. For our dataset (~1.36 B records ≈ 370 GB raw), would 3 partitions on S1 tier (480 GB) be sufficient after indexing expansion?
-
-
-2. If not, what would be the approximate equivalent configuration or number of partitions on S2 tier (640 GB per partition)?
-
-
-3. Is there any official sizing or index expansion guideline Microsoft recommends for accurate estimation?
+Area	Elasticsearch / Elastic Cloud	Azure AI Search
+Core engine	Original open-source Lucene (developed by Elastic)	Built on top of Lucene too
+Control & tuning	🧠 Full control — you can customize analyzers, phonetic filters, tokenizers, scoring, and synonyms deeply	⚙️ Limited to what Azure exposes in portal/JSON (you can’t add custom plugins)
+AI / Enrichment	Needs external orchestration (e.g., Azure OpenAI, Function Apps)	🧩 Built-in “Cognitive Skills” pipeline (OCR, key phrase extraction, sentiment, etc.)
+Integration	Works everywhere (Azure, AWS, GCP, on-prem)	Tight integration with Azure ecosystem (Blob, Functions, Cognitive Services)
+Management	Elastic Cloud = managed by Elastic (you choose region, size, upgrades)	Fully managed by Microsoft (no backend visibility, but zero ops)
+Cost model	Pay per compute/storage (more flexible)	Pay per Search Unit (fixed-size partitions, can get expensive)
+Scalability	Horizontal — shards & nodes (fine-grained control)	Partition-based — you must buy entire SUs (less flexible)
+Use cases	Complex search, analytics, logging, security, name search, e-commerce	Enterprise search, document enrichment, hybrid AI search
+Native AI features	None (but integrates easily with OpenAI, LangChain, etc.)	Built-in Semantic / Vector / Hybrid search (since 2023)
+Ease of use	Needs a little setup (Kibana, JSON, SDKs)	Easiest to start (few clicks + portal UI)
 
 
 
-Our goal is to ensure that our capacity and cost planning are aligned with Microsoft’s best practices for large-scale indexing scenarios.
 
-Thank you in advance for your assistance and clarification.
+
+
+
+Feature	Azure AI Search	Elasticsearch (Elastic Cloud)
+Define analyzer per field	✅ Yes	✅ Yes
+Built-in analyzers (Lucene)	✅ Limited list	✅ Full Lucene library
+Custom tokenizers	⚠️ Only from preset list	✅ Any tokenizer (standard, whitespace, regex, pattern, ngram)
+Custom token filters	⚠️ Predefined only	✅ Fully customizable (even order & params)
+Phonetic filter control	⚠️ Choose algorithm only	✅ Full config (encoder, language, etc.)
+Synonym handling	✅ Separate synonym map	✅ Inline or file-based, dynamic reload
+Custom plugins	❌ Not allowed	✅ Yes (phonetic, ICU, stemmer, etc.)
+Analyze API	✅ Yes (limited info)	✅ Detailed (tokens, positions, graphs)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Area	Azure AI Search (current)	Elastic Cloud equivalent
+Full-text indexing	✔ Built-in	✔ Same (Lucene core)
+Custom analyzers	✔ (limited via portal/JSON)	✔ Full Lucene control (define tokenizers, filters, phonetic plugins)
+Phonetic analyzer	✔ Pre-enabled (Double Metaphone)	✔ via official phonetic plugin — you enable it per index
+Synonym maps	✔ SynonymMap objects	✔ synonym_graph filter — same result
+OpenAI nickname expansion	✔ Azure function calls model	✔ You can still call OpenAI (same API) before querying Elastic
+Cognitive Skills (OCR, key-phrases, etc.)	✔ integrated skillsets	❌ you’d need your own pipeline (Azure Function or Logic App)
+Portal integration / Azure RBAC	✔ tight	⚠ minimal — separate Kibana UI, Elastic RBAC
+Query language	simple Lucene syntax	JSON DSL (more flexible but more verbose)
+
+
+
+
+
+
+
+
+
+
+
+Feature	Elastic Cloud (on Azure)	Azure AI Search
+Managed by	Elastic (partner)	Microsoft
+Infrastructure	Azure (Elastic deploys inside your region)	Azure native
+You manage	Just your indexes & data	Only data (no infra)
+Analyzer flexibility	Full Lucene control (phonetic, synonyms, etc.)	Limited predefined analyzers
+Integration	Elastic UI (Kibana) + SDKs	Azure Portal, OpenAI, Cognitive Skills
+Cost	~30–50% cheaper per GB	Higher but simpler all-in-one pricing
+
