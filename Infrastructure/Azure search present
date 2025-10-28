@@ -1,150 +1,64 @@
-Program.cs
+1. Exploring Elastic Cloud on Azure (Managed Elasticsearch)
 
-using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.ChatCompletion;
-using Azure.Search.Documents;
-using Azure;
+Task Title	Description	Est. Hours
 
-// Load config from appsettings.json
-var config = AppConfig.Load();
-
-// Set up Semantic Kernel + Azure OpenAI
-var builder = Kernel.CreateBuilder()
-    .AddAzureOpenAIChatCompletion("gpt-4o", config.OpenAI.Endpoint, config.OpenAI.ApiKey);
-var kernel = builder.Build();
-
-// Register NameVariation plugin
-var namePlugin = new NameVariationPlugin();
-kernel.Plugins.AddFromInstance(namePlugin, "Names");
-
-// Register AzureSearch plugin
-var searchClient = AzureSearchClientFactory.Create(config.Search);
-var searchPlugin = new AzureSearchPlugin(searchClient);
-kernel.Plugins.AddFromInstance(searchPlugin, "Search");
-
-// Set up chat and function calling
-var chatService = kernel.GetService<IChatCompletionService>();
-var settings = new OpenAIPromptExecutionSettings
-{
-    FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
-};
-
-// Run interaction
-var history = new ChatHistory();
-history.AddUserMessage("Find documents for names like 'Smith, John'.");
-
-var response = await chatService.GetChatMessageContentAsync(history, settings, kernel);
-Console.WriteLine("Assistant> " + response.Content);
-
---------------------------------------------------------------
-Plugins/NameVariationPlugin.cs
-
-using Microsoft.SemanticKernel;
-
-public class NameVariationPlugin
-{
-    [KernelFunction, Description("Generate similar-sounding name variants.")]
-    public async Task<string> GenerateVariantsAsync(string name)
-    {
-        await Task.CompletedTask;
-        return "Smith, Jon; Smyth, John; Smithe, John";
-    }
-}
-
---------------------------------------
-Plugins/AzureSearchPlugin.cs
-
-using Microsoft.SemanticKernel;
-using Azure.Search.Documents;
-using Azure.Search.Documents.Models;
-using System.Text;
-
-public class AzureSearchPlugin
-{
-    private readonly SearchClient _client;
-
-    public AzureSearchPlugin(SearchClient client)
-    {
-        _client = client;
-    }
-
-    [KernelFunction]
-    public async Task<string> SearchDocumentsAsync(string nameQuery)
-    {
-        var options = new SearchOptions { QueryType = SearchQueryType.Full };
-        options.SearchFields.Add("Name");
-
-        string fuzzyQuery = nameQuery + "~";
-        var results = await _client.SearchAsync<SearchDocument>(fuzzyQuery, options);
-
-        var builder = new StringBuilder();
-        await foreach (var result in results.Value.GetResultsAsync())
-        {
-            builder.AppendLine($"{result.Document["Id"]}: {result.Document["Name"]}");
-        }
-
-        return builder.ToString();
-    }
-}
+Research Elastic Cloud capabilities	Study Elastic Cloud on Azure docs – deployment models, SKUs, scaling, security integration.	4 h
+Evaluate analyzer support	Identify available analyzers (phonetic, fuzzy, synonym) and plugins like Double Metaphone.	4 h
+Compare with Azure AI Search	List differences in cost, query latency, and maintenance overhead.	5 h
+Study deployment architecture	Explore networking options, SLA, availability zones without actual deployment.	4 h
+Document findings & summary	Prepare comparison sheet and recommendation for architectural review.	4 h
+Total		21 h
 
 
 
----------------------------------------------------------
-Services/AzureSearchClientFactory.cs
+---
 
-using Azure;
-using Azure.Search.Documents;
+🔍 2. Exploring SearchStax Managed Solr on Azure
 
-public static class AzureSearchClientFactory
-{
-    public static SearchClient Create(SearchSettings config)
-    {
-        return new SearchClient(
-            new Uri(config.Endpoint),
-            config.IndexName,
-            new AzureKeyCredential(config.ApiKey));
-    }
-}
+Task Title	Description	Est. Hours
 
-----------------------------
-Models/AppConfig.cs
-
-using System.Text.Json;
-
-public class AppConfig
-{
-    public OpenAISettings OpenAI { get; set; }
-    public SearchSettings Search { get; set; }
-
-    public static AppConfig Load(string path = "appsettings.json") =>
-        JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path));
-}
-
-public class OpenAISettings
-{
-    public string Endpoint { get; set; }
-    public string ApiKey { get; set; }
-}
-
-public class SearchSettings
-{
-    public string Endpoint { get; set; }
-    public string IndexName { get; set; }
-    public string ApiKey { get; set; }
-}
-
----------------------
-appsettings.json
-{
-  "OpenAI": {
-    "Endpoint": "https://<your-resource>.openai.azure.com/",
-    "ApiKey": "<your-api-key>"
-  },
-  "Search": {
-    "Endpoint": "https://<your-search>.search.windows.net/",
-    "IndexName": "your-index",
-    "ApiKey": "<search-api-key>"
-  }
-}
+Understand SearchStax offerings	Explore features, pricing, and region availability on Azure Marketplace.	4 h
+Analyze Solr architecture	Study cluster setup, sharding, replication, and indexing capabilities.	4 h
+Check phonetic and fuzzy search options	Research Solr’s phonetic filters and fuzzy matching configuration.	4 h
+Compare Solr vs Elastic vs Azure AI Search	Create feature and cost comparison matrix.	5 h
+Summarize findings	Prepare notes for POC decision presentation.	4 h
 
 
+
+---
+
+⚙️ 3. Exploring Azure Cache for Redis (Enterprise) + RediSearch
+
+Task Title	Description	Est. Hours
+
+Research RediSearch module	Study full-text search, secondary indexing, and phonetic search capabilities.	4 h
+Evaluate Redis Enterprise tiers	Review pricing, storage limits, and HA configurations on Azure.	4 h
+Understand RediSearch query syntax	Learn supported search patterns, aggregations, and fuzzy match support.	4 h
+Performance and scalability review	Compare in-memory search trade-offs vs Elasticsearch and Solr.	5 h
+Document recommendation	Summarize use-case fit for title data search scenario.	4 h
+
+
+
+---
+
+🧠 4. Exploring Simple DB Search + Analyzers (DoubleMetaphone + Beider-Morse)
+
+Task Title	Description	Est. Hours
+
+Research phonetic algorithms	Study DoubleMetaphone and Beider-Morse principles and their C# implementations.	4 h
+Explore integration approaches	Check how phonetic codes can be stored and queried within SQL/PostgreSQL.	4 h
+Compare phonetic accuracy	Evaluate similarity scores and edge cases (e.g., Indian names).	4 h
+Estimate performance impact	Analyze storage and CPU impact of generating phonetic codes at insert time.	4 h
+Prepare summary document	Document approach and recommend next steps for POC.	5 h
+
+
+
+---
+
+📄 Common Cross-Story (Optional Add-On)
+
+Task Title	Description	Est. Hours
+
+Prepare architecture comparison slide	One slide summarizing Elastic vs Solr vs Redis vs DB approaches.	3 h
+Draft cost comparison table	Include estimated monthly Azure PaaS costs for each option.	3 h
+Finalize consolidated exploration report	Combine all findings into one document for architect review.	4 h
