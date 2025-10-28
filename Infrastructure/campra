@@ -1,67 +1,312 @@
-Pick #1 — Elastic Cloud on Azure (Managed Elasticsearch).
-Closest to what you already built in Azure Cognitive Search (Lucene analyzers, fuzziness, synonyms), plus the official Phonetic Analysis plugin (Soundex/Metaphone/Double-Metaphone). It’s a managed service that runs in Azure regions (US East/Virginia) with HA, snapshots, and upgrades handled for you. This gives you scale to billions of docs with familiar query DSL and the least code change. 
+Deploying and Managing Elastic Cloud on Azure: A Comprehensive Guide
 
-Pick #2 — SearchStax Managed Solr on Azure.
-If your dataset has lots of multilingual names and you want the strongest built-in phonetics, Solr’s Beider-Morse Phonetic Matching (BMPM) is excellent and native (no extra plugin). SearchStax runs SolrCloud for you on Azure with HA. 
+Elastic Cloud (managed Elasticsearch) can be seamlessly deployed on Microsoft Azure as a managed service. This guide provides Azure architects and engineering teams with detailed steps and best practices for deploying Elastic Cloud in East US 2, integrating with Azure services, and managing a production cluster at scale. The focus is on using Elastic Cloud’s managed service (not self-hosted on VMs or AKS), leveraging Azure Marketplace integration, and implementing robust networking, security, and operational practices.
 
-Pick #3 — Azure Cache for Redis (Enterprise) + RediSearch.
-Best when the indexed fields are tiny (e.g., names + a few attributes) and you want ultra-low latency. RediSearch supports fuzzy + phonetic (e.g., PHONETIC "dm:en") right in Azure-managed Redis. But for 1.36B docs, RAM sizing can get pricey; use only if your index can be very compact or sharded. 
+Deployment Options on Azure for Elastic Cloud
 
+Elastic offers a fully managed Elasticsearch Service that runs on Azure infrastructure. You can deploy this service either through the Azure Marketplace (Azure Native ISV SaaS offering) or directly via the Elastic Cloud console, while targeting Azure regions:
 
----
+Azure Marketplace Deployment: Using the Azure portal’s Marketplace, search for “Elastic Cloud (Elasticsearch) – Azure Native ISV Service” and subscribe to create an Elastic Cloud resource. This approach keeps billing and management within your Azure subscription (consumption-based pricing with an Enterprise-level Elastic subscription by default). During deployment, you will choose an Azure Resource Group, give the Elastic resource a name, select the region (e.g. East US 2) and the Elastic Stack version. Once created, the service will set up the Elasticsearch cluster and associated components (like Kibana) in that Azure region.
 
-Why I recommend Elastic Cloud (for you)
-
-Minimum rework: Very similar analyzers/queries to Azure Search; easy to replicate your custom analyzer stack (ASCII-folding, token filters, synonyms) and just add the phonetic filter. 
-
-Proven scale & HA: Horizontal sharding/replication, managed snapshots, and Azure-region deployment. 
-
-Cost control: You size nodes/storage directly (hot/warm tiers, compression), often cheaper than per-GB managed index pricing at your scale.
+Elastic Cloud Console Deployment: Alternatively, you can sign up on Elastic Cloud (cloud.elastic.co) and create a deployment, selecting Azure as the cloud provider and East US 2 (Virginia) as the region. Elastic Cloud supports East US 2 natively. If you use this method, you can later link your Azure billing or continue with Elastic’s direct billing. The underlying cluster will still run in Azure’s East US 2 data centers.
 
 
+Both methods result in the same managed Elastic Stack experience running on Azure, with Elastic responsible for maintenance of the cluster. The Azure Marketplace method simply consolidates your Elastic usage into your Azure bill and enables some Azure-portal integrations (like easy log ingestion and resource monitoring). In either case, ensure you pick East US 2 as the deployment region to meet the requirement (note: once a region is set, you cannot change it without redeploying).
 
----
+Deployment Steps via Azure Marketplace:
 
-Quick next steps (Elastic Cloud on Azure, East US 2)
-
-1. Region: Choose the Azure US-East/Virginia option closest to East US 2. 
+1. Subscribe to Elastic Cloud in Azure: In the Azure Portal, go to Marketplace and find **“Elastic Cloud (Elasticsearch) - An Azure Native ISV Service”**. Choose the Consumption-Based plan and click Subscribe. This will initiate the SaaS resource creation.
 
 
-2. Analyzer: Create an index with:
+2. Configure Deployment Details: Select your Azure Subscription and Resource Group, provide a name for the Elastic resource, choose East US 2 as the region, and select the Elasticsearch version (e.g., 8.x). You can accept default settings for logs/metrics integration unless customization is needed.
 
-asciifolding + lowercase
 
-tokenizer suitable for names (standard/whitespace)
+3. Complete and Create: Accept the terms and create the resource. Azure will provision the Elastic Cloud deployment. After a few minutes, you can navigate to the resource’s Overview in Azure and follow the Deployment URL to access Kibana (the Elastic Cloud console will prompt you to log in with your Elastic account or Azure AD single sign-on).
 
-phonetic token filter (e.g., double_metaphone), and a normal field for fuzzy (edit-distance) queries. 
+
+4. Elastic Console Access: The Elastic Cloud deployment can be managed via the Elastic web console as well, which you can reach through the Azure resource or directly at cloud.elastic.co with your linked organization. Initially, an organization is created for you (if one doesn’t exist) and tied to your Azure Marketplace subscription. From Elastic’s console, you have full control over cluster settings, scaling, and credentials.
 
 
 
-3. Ingest: Bulk load; store compact fields only (avoid storing large blobs in the index—keep them in Blob Storage, store IDs/metadata in ES).
+Once deployed, you have a fully managed Elasticsearch cluster running on Azure. The service will handle cluster provisioning, software updates (when triggered), and offers features like snapshots and monitoring out of the box.
+
+Network and Security Integration
+
+Operating Elasticsearch in a production Azure environment requires careful setup of networking and security. This section covers how to integrate the managed Elastic Cloud deployment with Azure virtual networks (for private access), how to manage identity and access (RBAC and SSO), and how to ensure data encryption in transit and at rest.
+
+Private Network Connectivity (Azure Private Link vs. VNet Peering)
+
+By default, an Elastic Cloud deployment is accessible via public endpoints over HTTPS. In a secure production setup on Azure, you likely want to eliminate exposure to the public Internet and allow only private, internal access from your Azure resources. Elastic Cloud on Azure supports Azure Private Link to achieve this:
+
+Azure Private Link: This service enables you to create a Private Endpoint in your Azure VNet that maps to the Elastic Cloud service, routing traffic through Azure’s backbone instead of the public Internet. When you enable Private Link for Elastic, Azure assigns a private IP in your VNet for the endpoint, and all Elasticsearch traffic (e.g. REST API calls, Kibana access) can flow through this private IP securely. Elastic provides a service alias for each region, which you use when creating the private endpoint. For example, in East US 2 the service alias might look like eastus2-prod-...azure.privatelinkservice. You create a Private Endpoint in your VNet pointing to this alias (via Azure Portal or CLI) and Azure will allocate an IP address from your subnet for Elastic.
+
+ Using Azure Private Link to connect an Azure VNet to Elastic Cloud. In this diagram, a Private Endpoint in the customer VNet (East US 2 region) is linked to the Elastic Cloud service, allowing traffic to flow privately. The DNS is configured so that the Elastic endpoint (e.g., https://<deployment-id>.privatelink.eastus2.azure.elastic-cloud.com) resolves to the private IP.
+
+DNS Configuration: After the private endpoint is created, configure an Azure Private DNS Zone (e.g., privatelink.eastus2.azure.elastic-cloud.com) and an A record that maps the Elastic endpoint hostname to the endpoint’s private IP. This ensures that when your clients (Azure VMs, App Services with VNet integration, etc.) try to reach the Elastic Cloud URL, they get the private IP. Microsoft’s documentation provides guidance on the DNS setup for Private Endpoints, and Elastic’s docs list the specific private DNS zone names for each region.
+
+Elastic Cloud Traffic Filter: In the Elastic Cloud console, you must create a Traffic Filter of type “Private Link” and approve the connection. Essentially, you register the Private Endpoint’s details in Elastic Cloud so that Elastic allows that private connection. Once associated with your deployment, only traffic coming via that Private Link (or other allowed filters) will be accepted. All public access can be cut off at this point, enforcing internal-only access. The final effect is that your cluster’s endpoints will have hostnames under privatelink.eastus2.azure.elastic-cloud.com (as opposed to public endpoints under azure.elastic-cloud.com), and only reachable within your VNet.
 
 
-4. Query pattern:
+Using Private Link is the recommended approach for a secure network integration because it does not require complex VNet peering or opening your NSGs broadly – the connection is an Azure-managed private tunnel to the managed service. (In fact, VNet Peering to Elastic’s underlying network is not applicable since the service runs in Elastic-owned subscriptions; Private Link is the correct pattern for third-party services). Be sure to place the Private Endpoint in the same region (East US 2) and same VNet as your consuming services for optimal routing. Optionally, you can enable service endpoint policies/NSG rules to restrict egress only to Elastic’s service if needed.
 
-Use multi_match with fuzziness: "AUTO" on the normal field;
+Identity and Access Management (RBAC and SSO Integration)
 
-OR search the phonetic field for “sounds-like” matches;
+Managing access to your Elastic Cloud deployment involves both platform-level access (who can manage the deployment) and Elasticsearch/Kibana access (who can query data or view dashboards). Elastic Cloud provides role-based access control (RBAC) and can integrate with Azure AD for single sign-on:
 
-Combine with filters (order no., date, etc.) for precision.
+Elastic Cloud RBAC: Within the Elastic Cloud organization (the one created when you set up the deployment), you can define users and roles. There are built-in roles for organization management, and you can assign deployment-specific roles (like allowing certain users read-only access to Kibana, etc.). By default, the initial user (often your Azure account email if using Marketplace SSO) will be an administrator. Create additional users for your team as needed and assign appropriate roles. This ensures operational tasks (like snapshot management, scaling, etc.) are limited to admins, while application developers or analysts can be given access only to the data they need.
 
+Azure AD Single Sign-On (SSO): For user authentication to Kibana and Elastic API, you can integrate Elastic with Microsoft Entra ID (Azure AD) using SAML or OpenID Connect. Elastic’s documentation provides a detailed guide on configuring Azure AD as a SAML identity provider. In summary, you would register Elastic Cloud as an enterprise application in Azure AD, configure SAML with the correct Entity ID and ACS URL (provided by Elastic Cloud), and then in Elastic Cloud create a SAML authentication realm. Once set up, this allows users to log into Kibana using their Azure AD credentials (with MFA or any policies you have in AD). This greatly simplifies user management by leveraging your existing corporate identities and can enable features like Single Sign-On and multi-factor auth for accessing Elasticsearch data.
 
+Role Mapping: After enabling SSO, you map Azure AD groups or claims to Elastic roles. For example, you might map an Azure AD group “DataScientists” to a role that has read access to certain indices, and another group “ElasticAdmins” to the superuser role. This way, when a user logs in via SSO, Elastic Cloud assigns privileges according to their group membership. This uses Elastic’s role mapping rules (JSON or rules in Kibana Security settings).
 
-5. Sizing: Start with a small hot tier (e.g., 3 data nodes, 1–2TB each) + replicas; adjust shard count to keep each primary shard ≤50–75GB once loaded (easier rebalancing). Monitor heap, segment merging, and I/O before scaling.
-
-
-
-
----
-
-When to prefer Solr (SearchStax)
-
-You specifically want Beider-Morse (often better for diverse surnames than Double-Metaphone). Managed Solr on Azure gives you BMPM out-of-the-box and SolrCloud HA. 
+API Keys and Azure Services: If Azure PaaS services (like Functions or Apps) need to query Elasticsearch, instead of using user passwords, consider creating API Keys in Elasticsearch for programmatic access. API Keys can be scoped to specific permissions (e.g., ingest to certain indices only). Store these secrets in Azure Key Vault or App Settings, not in code, to keep them secure. Elastic API keys are a good way to avoid embedding long-lived credentials and they can be revoked independently.
 
 
-When to prefer Redis + RediSearch
+Note: The Azure Marketplace deployment process may allow using your Azure account to initially authenticate to Elastic (it often prompts to “accept” and link your profile). This sets up a trust so that you can use Azure credentials to single sign-on. Make sure the proper Azure AD permissions are consented to (the Elastic app in Azure AD may need read access to your profile). If you encounter issues logging in via SSO, check that the Azure AD user has been granted access to the Elastic organization or try inviting the user by email through the Elastic console.
 
-Your “search” is essentially name lookups on a compact schema and you need blazing latency. Define TEXT PHONETIC "dm:en" on the name field; queries use fuzzy operators. Just be mindful of RAM at 1.36B docs. 
+Data Encryption at Rest and In Transit
+
+Security of data is paramount in a cloud deployment. Elastic Cloud on Azure addresses encryption on two fronts: encryption in transit (network encryption) and encryption at rest (storage encryption):
+
+Encryption In Transit: All communication with Elastic Cloud endpoints is encrypted via HTTPS (TLS). The region info indicates “HTTPS only” for Azure regions, meaning you must use https:// endpoints for Elasticsearch and Kibana. Elastic manages TLS certificates for these endpoints. Ensure that your clients also enforce certificate validation. Within the cluster, Elastic Cloud also encrypts node-to-node traffic by default, so any data moving between Elasticsearch nodes or between Elasticsearch and Kibana is protected. You don’t need to manage certificates manually; Elastic Cloud’s platform handles certificate rotation and secure communication out of the box.
+
+Encryption at Rest (Managed Disks): All data stored by your Elastic cluster (indices, snapshots, etc.) on Azure is encrypted at rest. By default, Elastic Cloud uses the cloud provider’s disk encryption (Azure Storage Service Encryption with platform-managed keys) for the volumes holding your data. This means that if someone somehow obtained the raw disk, they could not read the data without the keys. For additional control, Elastic Cloud (with Enterprise subscription) supports Bring Your Own Key (BYOK) encryption. You can provision a key in Azure Key Vault and have Elastic use that customer-managed key to encrypt the data encryption keys for your deployment. In practice, you create an RSA key in Key Vault and provide Elastic Cloud with the Key Identifier URI – Elastic will then encrypt the cluster’s volumes using a data key wrapped by your Key Vault key. This feature gives you full control to revoke or rotate keys via Azure Key Vault if needed, adding an extra layer of security beyond the default encryption.
+
+Backup Encryption: If you configure snapshots to an Azure Blob storage (covered later), note that those snapshots can also be encrypted with a key. By default, snapshots stored in Azure Storage inherit the encryption of the storage account (Azure automatically encrypts blob data). If using customer-managed keys on Elastic side, snapshot data written to your own blob container is not additionally encrypted by that key (Elastic’s BYOK encrypts the cluster data and snapshots stored in the Elastic-managed repository, but when you use a custom snapshot repository like your Azure Storage, the encryption falls to Azure’s side). Therefore, if needed, you can enable Azure Storage encryption with your own keys as well for the container.
+
+
+In summary, the managed service ensures all data is encrypted in transit and at rest by default. You should still enforce best practices: use HTTPS endpoints only, restrict who has API access (and consider enabling field- or document-level security if on higher licenses for sensitive data), and consider BYOK if your compliance requires customer-managed keys.
+
+Cluster Sizing and Architecture for 1.36 Billion Documents
+
+Sizing an Elasticsearch cluster for 1.36 billion documents (~8 KB each) requires careful planning of the cluster architecture. We need to determine how to handle roughly on the order of 10^9 documents which, at ~8 KB each, is roughly ~10–11 TB of raw data (uncompressed). Key considerations include using a hot/warm architecture, choosing an optimal number of shards and replicas, planning for indexing throughput, and sizing nodes (CPU/memory/storage) appropriately. Below we break down the sizing approach:
+
+Hot-Warm Architecture for Large Data Volumes
+
+For such a large dataset, especially if it’s time-series or log data, a hot-warm tiered architecture is recommended. In a hot-warm setup:
+
+Hot Nodes: These handle the recent, actively indexed data. They use fast storage (NVMe/SSD) and higher CPU because they bear the brunt of indexing and querying on fresh data. Hot nodes store data that is frequently queried (e.g., last few days or weeks). In our scenario, if the 1.36B documents accumulate over time, we might keep the last 7-30 days in the hot tier.
+
+Warm Nodes: These store older, read-mostly or read-only indices. They can use larger, slower disks (e.g., HDD or standard SSD) to economically store large volumes. Warm nodes still need reasonable RAM and CPU, but since they do not handle new indexing, they are less strained. When indices exceed the hot retention period, ILM (Index Lifecycle Management) will relocate them to warm nodes.
+
+Cold or Frozen (optional): The question doesn’t explicitly ask for cold tier, but in Elastic, a cold tier (searchable snapshot) or frozen tier could be used beyond warm to store data in object storage with lazy loading. For 1.36B docs, you might consider cold storage if you need to retain data longer (this would involve storing indices as snapshots in Azure Blob and querying through the frozen tier). However, if not needed, warm tier can be the final resting place before deletion.
+
+
+The hot-warm approach is effective because it uses expensive resources only for hot data and uses cheaper resources for warm data, reducing cost while still retaining data for analysis. Additionally, it can improve performance: hot nodes are not burdened by very old data, and warm nodes handle queries for old data without the overhead of writes. As noted by Elastic, querying warm data can still be efficient because those nodes are dedicated to queries and not busy indexing.
+
+For our scale, a possible deployment might include (for example) 3 hot data nodes and 6 warm data nodes (the ratio depends on how much of the 1.36B documents are “hot”). If 1.36B is the total accumulation for, say, a year of data, and you keep 30 days hot, then perhaps 10% of data is hot, 90% warm, etc. The hot tier might store ~0.136B docs at any time, and warm tier ~1.224B docs. You can adjust node counts based on capacity (we’ll estimate storage below).
+
+Additionally, dedicated node roles are advised for larger clusters. Use 3 dedicated master nodes (small instances) to maintain cluster state and ensure high availability of cluster metadata. Consider dedicated ingest nodes if you perform heavy ingest pipelines (these nodes can handle ingest pipelines and relieve data nodes). Also, if using machine learning features or cross-cluster search, dedicated nodes can be allocated for those. But at minimum: Data nodes (hot/warm) + Master-eligible nodes, separated.
+
+Shard and Index Design (Shard Count, Size, and Replicas)
+
+Choosing the correct number of shards and index strategy is critical for both performance and manageability when dealing with ~billion-scale documents:
+
+Shard Size Best Practices: A general guideline is to keep shard sizes in the range of tens of gigabytes, e.g. 10–50 GB per shard. Oversized shards (hundreds of GB) can lead to long recovery times and heap pressure, while too many tiny shards overhead can strain the cluster. Also, a single shard shouldn’t hold more than about 200 million documents. With ~1.36B documents total, you will need to distribute them across many shards.
+
+Number of Shards: If we target ~30-50 GB per shard, and each document is 8 KB (~0.008 MB), one shard of 50 GB could hold roughly 6.25 million documents (50,000 MB / 0.008 MB ≈ 6.25M). In practice, index storage overhead means the actual stored size per document is larger (due to indexing, doc values, etc.), but compression also helps. As a ballpark, 1.36B docs of 8KB might consume around 10–15 TB of storage (assuming ~1.5x indexing overhead and replication factor). Without replication, splitting 12 TB into 50 GB shards would mean ~240 shards for primaries. If using daily indices, you wouldn’t have one index with 240 shards; instead you might have, say, 1 shard per day for 240 days, or 5 shards per index if monthly, etc. Time-based indices combined with ILM is a typical strategy: for example, create an index per day or per week and let ILM rollover when a size or age threshold is met (say, rollover when index reaches 50GB or 30 days, whichever first). This naturally controls shard sizes and counts. Elastic’s ILM can automate rollover of hot indices to keep shards from growing beyond ~50GB. In our scenario, we might configure ILM to rollover an index when it hits ~50GB or e.g. 20 million docs, so that no single shard holds more than ~20M documents.
+
+Shard Count Example: If 1.36B docs are evenly distributed over, say, 12 monthly indices (just as an illustrative approach), that’s ~113 million docs per index. If each index had 5 primary shards, that’s ~22.6M docs per shard (~180 GB raw data per shard if 8KB each uncompressed, which is too high). So we would likely have more indices (maybe daily indices if 1.36B/year → ~3.7M docs per day, which is manageable with 1 shard per day). A daily index with ~3.7 million docs (roughly 30 GB of data) is a reasonable shard size. Thus, daily indices with 1 primary shard each could yield ~365 shards/year. This might be more shards than needed; another approach is weekly indices or use ILM rollover (e.g., rollover when 30GB reached, which might happen every few days). The key is to plan shard counts to stay within optimal size ranges.
+
+Replicas for High Availability: Configure at least 1 replica for each primary shard (so that each index has 1 primary + 1 replica of each shard). This ensures a copy of the data on a different node, providing failover capability. With multi-AZ deployment (discussed in HA section), the replicas can be in another AZ. One replica effectively doubles storage needs (that 12 TB of primary data becomes 24 TB with replicas). If search throughput is a concern, having a replica also allows search load to be spread (queries can hit either primary or replica shards). Generally, 1 replica is sufficient; 2 replicas (3 total copies) might be considered if read-heavy or for extra safety, but that’s a trade-off with cost.
+
+Shard Allocation to Tiers: Use index-level routing or ILM to allocate older indices to warm nodes. In ILM policy, you can specify a warm phase action to allocate to the “warm” node role after rollover. This automatically moves shards off hot nodes. In Elastic Cloud, if you use a hot-warm deployment template, it will handle much of this (hot nodes are labeled as “data_hot” and warm as “data_warm” roles).
+
+Indexing Considerations: Bulk indexing will be necessary for initially loading 1.36B documents (if this is a historical migration) or to ingest high-velocity data. Use the bulk API to ingest documents in batches (e.g., 5,000–10,000 docs per bulk request) to optimize throughput. Tune the refresh interval (you might set a longer refresh_interval or use -1 (manual refresh) during bulk loads to improve speed). If using ingestion pipelines (for transforms or enrichment), consider the throughput and possibly scale out ingest nodes or use Azure Functions to preprocess data so the cluster does less work. Also, design efficient mappings – disable unnecessary indexing for fields that you don’t need to search on to reduce index size. For instance, not indexing large text fields or binary blobs (store them externally or as metadata only) will save space.
+
+
+Node Sizing and Heap Memory
+
+Next, determine the node types, counts, and sizes. Given the scale (~10+ TB of data, 1.36B docs), you will need multiple data nodes:
+
+Storage Capacity: Suppose each primary shard is ~40GB and we have ~240 primaries (for the sake of argument, exact number depends on strategy). That’s ~9.6 TB primary data. With one replica, ~19.2 TB total data stored. You want to ensure your nodes collectively have enough disk to hold this plus some headroom (never fill Elasticsearch nodes beyond ~80% disk). For example, if you choose a data node size that provides ~2 TB of usable disk, you would need around 10 nodes just for primaries (~9.6TB/2TB ≈ 5 nodes) and another 5 for replicas, but typically primaries and replicas are intermixed on nodes. It might end up around 10 data nodes to store ~20TB (2TB each at ~100% utilization; but at 80% target, ~12–13 nodes). If you instead use smaller nodes, e.g., 1 TB each, you’d need ~20 nodes to accommodate 20TB safely.
+
+Hot vs Warm Node Sizing: Hot nodes should have faster storage and potentially more CPU to handle indexing. Warm nodes can have larger disks (to store more data per node). For instance, a hot node might use an Azure VM type with, say, 8 vCPUs, 64 GB RAM, and 1 TB of premium SSD, whereas a warm node might use 8 vCPU, 64 GB RAM but attached to 2-4 TB of standard SSD or HDD. Elastic Cloud allows selecting different hardware tiers for hot and warm in a deployment. Heap Memory: A rule of thumb is allocate no more than ~30 GB heap per node (due to JVM compressed pointers). Many deployments stick to 30 GB heap (on a 64 GB RAM node, leaving rest for OS cache). If nodes are very large (say 128 GB RAM), you might go up to 32 GB heap. The heap primarily affects how many shards a node can hold and query efficiently (because a portion of index metadata and field data structures live in heap). For our scenario, if each node has 30 GB heap, a node could handle perhaps 20-30 shards comfortably (this is variable, but assume ~1 GB or more heap per 50GB shard for overhead). With ~240 primary shards plus replicas ~240, total ~480 shard copies in cluster, spread across e.g. 12 nodes, that’s 40 shards per node average – which might be a bit high. If we have 18 nodes, that’s ~26 shards per node, more reasonable. We might start with a cluster of around 6 hot nodes + 12 warm nodes, each with 64 GB RAM (30 GB heap). This is just a rough estimate – actual sizing should be tested with realistic data and queries. Heap sizing should also account for query complexity – heavy aggregations need more heap, whereas straight keyword searches are lighter.
+
+CPU and Performance: Ensure the CPU count and speed is sufficient, especially for hot nodes. High indexing rates (> tens of thousands per second) will use significant CPU for text analysis and indexing. If the dataset is logs or analytics, consider using index templates to disable norms or use keyword fields where appropriate to reduce processing. If using a lot of ingest pipelines (like regex, grok, etc.), that adds CPU usage too.
+
+Master Nodes: Always have 3 dedicated master-eligible nodes (they can be small, e.g., 2 vCPU, 4-8 GB RAM machines). These maintain cluster metadata. Do not use data nodes as masters in a cluster this size – you want masters free to manage cluster state updates (like shard allocations) without being bogged down by data work. Elastic Cloud usually takes care of this if you select a production profile; ensure “Zone Count = 3” which implies 3 masters across zones.
+
+Ingest/Coordinator Nodes (optional): If your client usage is heavy (many coordinating queries or heavy aggregation queries), you can introduce coordinator-only nodes to handle the query fan-out. Similarly, if using many ingest pipelines (e.g. parsing logs), ingest nodes can be added to offload that. These are advanced optimizations and can be added after initial deployment if needed.
+
+
+In summary, a possible sizing could be: Hot tier: 3-6 nodes (e.g., 64GB RAM each, NVMe storage); Warm tier: 6-12 nodes (64GB RAM each, slower/larger disks). That would yield a cluster of ~9 to 18 data nodes. Always measure and adjust: start with smaller size and scale up if indexing or query performance isn’t meeting requirements. Elastic Cloud allows vertical and horizontal scaling by adjusting the deployment sliders (you can add nodes or increase node size with minimal friction).
+
+Example ILM Strategy and Shard Allocation
+
+To tie the above together, here is an example approach using ILM (Index Lifecycle Management) for managing the 1.36B documents:
+
+ILM Policy: Define an ILM policy with a hot phase and warm phase (and eventually a delete phase). For example, hot phase: keep indices for 14 days on hot nodes, warm phase: thereafter on warm nodes until 90 days, then delete. Within the hot phase, use rollover: e.g., rollover when an index reaches 50 GB or 7 days, whichever comes first. This ensures hot indices don’t grow too large (shards stay ~<50GB). The warm phase can simply be “after 14 days, move to warm nodes”. No additional shards are created in warm; it’s just relocating existing ones.
+
+Templates and Rollover: Your index naming can use a data stream or alias with rollover. For example, use an index alias like logs-prod with a write index that rolls over. ILM can manage the sequence (creating logs-prod-000001, then 000002, etc.). This way, you don’t worry about manually creating indices per day.
+
+Validate Shard Distribution: After setting up ILM and initial indexing, check the shard counts per node. Use _cat/shards API or the Monitoring UI to ensure shards are balanced across nodes and that heap usage is healthy. If some nodes have too many shards, you might increase node count or adjust ILM rollover to create slightly fewer shards (maybe allow 100GB per shard on warm data if needed – but be cautious not to go too high).
+
+
+By following these shard guidelines, you maintain a cluster that is within known best practices: *“Generally, an optimal shard should hold 10-50GB of data, with fewer than 200 million documents per shard.”*. This ensures manageability and performance even at billions of documents.
+
+Integration with Azure Services and Data Sources
+
+One advantage of deploying Elastic on Azure is the ability to easily integrate it with other Azure Platform-as-a-Service (PaaS) offerings. We will discuss how Azure application services (Functions, App Service, Logic Apps) can ingest or query data from Elastic, how Azure Blob Storage can be used in conjunction with Elastic, and options for monitoring/logging with Azure’s tools versus Elastic’s own observability features.
+
+Azure Functions, App Services, and Logic Apps (Ingestion and Query)
+
+Application Integration: Azure Functions and Web Apps (App Service) often serve as the data producers or consumers that interact with Elasticsearch. For example, you might have:
+
+An Azure Function that triggers on new events or items (from an Event Hub, Service Bus, or HTTP requests) and then indexes documents into Elasticsearch.
+
+An App Service (web API or application) that performs searches on Elasticsearch to drive application features (search bar, analytics, etc.).
+
+A Logic App that orchestrates data movement – for instance, on a schedule, it could take data from Cosmos DB or Blob and upsert to Elasticsearch, or respond to alerts from Elastic and create work items.
+
+
+To integrate these with Elastic Cloud:
+
+Networking for Azure Services: If you have set up Private Link, your Functions or App Service need network access to the Elastic private endpoint. For App Service or Functions on a consumption plan, you can use VNet Integration to allow the service to make calls into your VNet. Typically, for App Service, you would use the Regional VNet Integration feature to attach the app to the same VNet where the Elastic Private Endpoint resides. For Functions, if using a Dynamic plan, you may need to switch to a Premium plan or App Service Plan to get VNet integration, or use outgoing application proxies. Another approach is to deploy your function in a container inside an Azure Container Instance or Kubernetes which has VNet access, but that adds complexity. The simplest: Use App Service Plan or Premium Functions with VNet Integration. Once enabled, the code in the function or app can resolve the privatelink.eastus2.azure.elastic-cloud.com DNS and hit the private IP of Elastic. Make sure the VNet’s NSG allows outbound to the Private Link and that the Private DNS zone is linked to the VNet (these are usually handled when creating the Private Endpoint).
+
+Authentication from Azure Services: As mentioned, avoid embedding basic auth in code. Instead, store an Elastic API key or service account credential in Azure Key Vault or in the Function/App’s configuration (as a secret setting). The Azure service can retrieve the secret at startup or via managed identity if using Key Vault. Then use that credential in API calls to Elastic (for example, using the official Elastic client libraries or simply via HTTP calls).
+
+Logic Apps: Azure Logic Apps can call Elastic Cloud via the built-in HTTP connector. There isn’t an out-of-the-box Elastic connector at the time of writing (Logic Apps Standard might allow integration via custom connectors or Azure API Management proxies). However, you can use an HTTP action to call the Elasticsearch REST API endpoints. This requires either the Elastic endpoint to be internet-accessible or the Logic App to run in an integration service environment that has VNet access (for Private Link). If using Logic Apps Consumption (multi-tenant), it won’t be in your VNet, so Private Link won’t directly work; a workaround is to use an Azure Function as a proxy (since consumption logic apps can call an HTTP-triggered function in your VNet). For Logic Apps Standard or ISE, you can integrate with VNet.
+
+Data Ingestion Pipelines: Azure provides many ways to route data to Elastic. Apart from custom code, you can also use Azure Event Hub and Elastic’s Kafka/Logstash integrations (for example, send events to Event Hub, and have a Logstash or Elastic Agent ingest from Event Hub into Elastic). If you prefer serverless, consider using Azure Event Grid and Functions to capture events (like blob created events, IoT events, etc.) and feed Elastic. Another route is using Azure Data Factory or Synapse pipelines if dealing with bulk data movement (e.g., moving a large SQL dataset to Elastic could be done by an export job and an _bulk API in a function).
+
+
+In summary, Azure application services can seamlessly interface with Elastic using standard REST APIs. The main planning points are network connectivity (Private Link/VNet) and secure credential management. Many users set up client libraries: e.g., the Azure Function might use the official Elasticsearch .NET or Python client to index documents.
+
+Azure Blob Storage for Document Storage and Snapshots
+
+Azure Blob Storage can play two key roles in an Elastic architecture: external document storage and snapshot repository:
+
+Storing Large Documents or Attachments: If your 1.36B documents include large binary blobs (like PDFs, images, etc.), it is often wise not to store the actual binary in Elasticsearch (which would bloat the index). Instead, store those files in Azure Blob Storage and index only metadata or a reference (like the blob URL or an ID). You can use Elastic’s ingest attachment plugin to extract text content from files for indexing, but store the original file in Blob. This way, your Elasticsearch index remains lighter (only text and metadata fields, which are ~8KB as given). The application can retrieve the file from Blob when needed (given the reference from search results).
+
+Snapshot and Restore (Backups): Elasticsearch has a snapshot feature to back up indices to an external repository. In Elastic Cloud, daily snapshots to a managed repository are taken automatically (Elastic Cloud typically does daily snapshots stored in their cloud storage, retaining a few days). However, for compliance or longer retention, you might want to configure your own snapshot repository in Azure Blob Storage. Azure Repository: Elastic supports an Azure Cloud Storage repository plugin. In Elastic Cloud, you can configure this by adding an Azure storage account key to the Elastic keystore and registering a repository. For example:
+
+Create an Azure Storage account and a container (e.g., elasticsearch-snapshots) in East US 2.
+
+In Elastic Cloud’s deployment security settings, add the Azure storage account name and key as secure settings (Elastic references these as azure.client.default.account and azure.client.default.key or a named client).
+
+In Kibana (Snapshot and Restore UI or using API), register a repository of type azure with the container name and account (as per Elastic docs). Once verified, you can initiate snapshots on-demand or via ILM (ILM can be configured with a snapshot policy in the cold phase, for example).
+
+
+After setup, you could schedule snapshots (maybe more frequently than the default daily if needed). Snapshots are incremental, so after the first full snapshot, subsequent ones only save changes, which is efficient. Storing them in your Azure blob means you have full control and can also configure Blob lifecycle (e.g., move older snapshots to archive tier if needed or replicate to another region using RA-GRS storage for DR).
+
+Restoration: If a disaster hits or you want to test DR, you can restore snapshots from Azure storage into a new Elastic Cloud deployment (even in another region). Elastic Cloud’s snapshot restore process would simply need access to the repository (so ensure the new deployment is also configured with the storage credentials). This could be part of a DR drill: spin up a cluster in West US or another region, register the same Azure blob repository (which if it’s GRS, has data replicated), and restore the latest snapshot.
+
+
+Using Azure Blob for snapshots provides an extra safety net beyond Elastic’s managed snapshots. It also allows you to keep backups for longer term (since Elastic might only keep last few snapshots by default). Once configured, **“your snapshot repository is now set up using Azure Blob storage... and you can begin sending Elasticsearch snapshots to your own container.”**.
+
+Monitoring and Logging Integration (Azure Monitor vs Elastic Observability)
+
+Cluster Monitoring: Elastic Cloud comes with monitoring tools. You can view cluster metrics (CPU, memory, search rate, indexing rate, etc.) in Kibana’s Stack Monitoring if enabled. Alternatively, Elastic provides an “overview” in the Azure portal for the Elastic resource. However, integrating with Azure’s native monitoring might be desired for central IT.
+
+Azure Monitor (Log Analytics): When you set up the Elastic resource via Marketplace, you might have noticed options for logs and metrics. Azure can configure diagnostic settings on your Elastic resource, streaming logs or metrics to an Azure Monitor Log Analytics workspace. According to Azure’s documentation, you can manage which Azure resources send logs to Elastic (which is more about sending Azure logs into Elastic, interestingly). The integration is primarily aimed at shipping Azure service logs (from, say, Azure VM or App Service diagnostics) into Elastic for analysis. But the other direction – monitoring Elastic with Azure Monitor – is not as direct, since Elastic is not emitting Azure Monitor metrics by itself.
+
+If you require key metrics/alerts in Azure Monitor, one approach is to use Elastic’s APIs or a Logstash to push metrics into Azure Monitor, but that’s uncommon. Instead, you might create Azure Monitor alerts on the Elastic resource’s status (the Azure resource may show status). Azure might treat the Elastic resource like other Azure services for uptime (but details on that are sparse).
+
+Azure Workbooks or dashboards could be created if Elastic exposed metrics to Azure, but currently the recommended path is to use Elastic’s own monitoring.
+
+
+Elastic Observability: It likely makes sense to use the Elastic Stack itself for observability of your applications and even of Azure resources:
+
+Deploy Elastic Agents on your Azure VMs or use the Azure integration to pull platform logs. The Azure native integration simplifies ingesting Azure platform logs (Activity Log, etc.) into Elastic: you can tag Azure resources and automatically forward their diagnostics to Elastic. This is what the Azure Portal blade “Elastic deployment configuration > Logs & metrics” helps configure. Essentially, it sets up rules so that, for example, all VMs with a certain tag will have the Elastic VM extension installed, or all App Services logs go to an Event Hub that Elastic reads. If your goal is centralized logging, you can send everything to Elastic and use Kibana dashboards to monitor.
+
+Elastic APM can monitor your Azure App Services or functions if you integrate the APM agent in your application code. This would give you application performance monitoring data in Elastic, complementing Azure’s Application Insights (you might use one or the other, or both).
+
+Azure Monitor vs Kibana for alerting: You can set up alerts in Elastic (Watcher or Kibana Rules) for conditions like cluster health yellow/red, high CPU, etc., and have those trigger emails or webhooks (could even create Azure Alert via webhook if needed). Azure Monitor would typically not have deep insight into Elastic internals since it’s a managed black box from Azure’s perspective.
+
+
+
+In essence, for cluster health and performance monitoring, rely on Elastic’s built-in monitoring (it’s tailored for Elasticsearch metrics). For auditing and usage logs, you can also enable Elasticsearch audit logs (if needed) and those can be shipped to Azure if required for compliance.
+
+Logging of Azure Services to Elastic: A likely use-case is sending, say, Azure Function logs or App Service logs to Elastic (to analyze along with your data). The Azure native integration (the Elastic resource in Azure) helps set this up: you can select which resource logs to ingest to Elastic. Under the Elastic resource’s options, “Ingest logs and metrics from Azure Services” allows you to pick Azure services and have their diagnostic logs flow into Elastic. This uses a behind-the-scenes mechanism (it might deploy the Elastic Agent as an extension or route logs via Event Hub). The result is a unified observability: your application logs and metrics in Elastic, alongside the data they generate.
+
+To summarize, both Azure and Elastic provide monitoring, but Elastic Observability is tightly integrated with the Elastic deployment and provides richer insight for search/ingest performance. Azure Monitor can be used for high-level status or to integrate with Azure’s alerting ecosystem if needed. It’s not an either/or choice – you might use Elastic for detailed monitoring, and also have some Azure alerts for things like “Elastic resource is down” or cost monitoring.
+
+Production Best Practices
+
+In a production environment, beyond initial deployment and sizing, you must manage the cluster lifecycle and ensure reliability. Key best practices include using Index Lifecycle Management (ILM) to manage data retention, setting up snapshot and restore for backups, planning upgrade strategies to keep the stack up-to-date, and configuring for High Availability (HA) and Disaster Recovery (DR). We will cover each of these:
+
+Index Lifecycle Management (ILM) and Data Retention
+
+Index Lifecycle Management is essential for automating data retention and tiering, especially with hot/warm architecture. We discussed an ILM strategy in sizing; here are best practice points:
+
+Use ILM Policies: Define policies that move indices through phases: Hot → Warm → (Cold) → Delete. For example, a logs ILM policy might keep data hot for 7 days, warm for 90 days, cold for 180 days, then delete. Each phase can have actions like rollover, shrink, forcemerge, and eventually delete. This ensures your cluster doesn’t keep growing indefinitely – old indices are removed, freeing space.
+
+Rollover Indices Instead of Growing Forever: As noted earlier, rollover based on size and/or age is critical to avoid single indices becoming too large. By keeping indices at manageable sizes, you prevent problems during merges and searches. In production, it’s common to rollover daily or when ~30-50GB, whichever comes first.
+
+Force Merge on Warm/Cold (Optional): ILM can perform a force merge in warm or cold phase to reduce segment count (e.g., merge down to 1 segment per shard). This can improve search efficiency on read-only indices. However, force merge is I/O intensive; use it judiciously and perhaps only for very cold data.
+
+Delete Phase: Don’t forget to eventually purge data if it’s no longer needed. ILM delete phase will automatically remove indices older than X (ensuring you don’t run out of disk). If you do need indefinite retention, consider cold tier on searchable snapshots as an alternative to keep data beyond warm cheaply.
+
+Templates and Policy Application: Ensure your index templates (or data stream definitions) specify the ILM policy name, so that new indices automatically get managed. In Elastic Cloud, if you use “Integrations” (for Beats data, etc.), the default policies are often already set. For custom indices, you must attach the policy via template or when creating the index.
+
+
+By implementing ILM, you effectively automate hot/warm transitions and data deletion, which keeps the cluster size in check and performance optimal over time.
+
+Backup and Recovery (Snapshot/Restore)
+
+Regular snapshots are the cornerstone of disaster recovery for Elasticsearch. Even though Elastic Cloud manages some snapshots, treat it as your responsibility to ensure backups:
+
+Snapshot Frequency: Take snapshots of important indices (or the whole cluster) at a suitable interval. Daily snapshots are common; for a very active dataset, you might do multiple snapshots per day (since they are incremental, this is feasible). If using the Elastic Cloud-managed snapshots, verify what the retention is (Elastic Cloud usually retains snapshots for 7 days by default). If that’s not enough, configure your own repository on Azure Blob and do your own snapshots (you can script this with a scheduled watcher or a simple cron using Curator or Elastic Cloud’s snapshot API).
+
+Automate Snapshots: You can use Curator (an OSS tool) or even a simple script triggered by a Function app to call the _snapshot API on schedule. Elastic Cloud’s API also allows setting up snapshot lifecycle management (if you have that feature available, you can create a Snapshot Lifecycle Policy that automates it).
+
+Store Snapshots in Geo-Redundant Storage: If DR is a concern, use an Azure Storage account with geo-replication (RA-GRS). That way, if East US 2 region is down, the backups are already replicated to, say, West US 2. You could then restore in another region if needed.
+
+Testing Restores: Regularly test the restore process. This means spinning up a separate Elastic cluster (perhaps in a dev environment or using a smaller instance) and restoring a snapshot to verify that your snapshots are valid. This also gives practice in how to recover if the worst happens. It’s also a way to make sure you know how to handle index version changes, etc., in restores.
+
+
+Remember, in Elastic Cloud, snapshots are your DR plan unless you set up cross-cluster replication. As Opster’s guide suggests, “taking regular snapshots” is one of the most effective DR strategies. And these snapshots can be stored on Azure blob, as mentioned (which can be one of file system, S3, HDFS, Azure, etc.).
+
+Upgrade Strategies (Keeping Elastic Stack Up-to-date)
+
+Running a production cluster means you’ll need to upgrade periodically (for new features, improvements, and security patches). Elastic Cloud makes the upgrade process easier but you should still approach it carefully:
+
+Managed Upgrades: In Elastic Cloud, you can perform a one-click upgrade of the deployment to a newer version (for minor or major version bumps). This triggers a rolling restart upgrade – meaning nodes are upgraded one at a time to avoid total downtime. In a healthy HA cluster (with replicas in place), a rolling upgrade will keep the cluster green throughout (one node goes down, its shards served by replicas, then comes back, etc.). Always ensure your cluster is green and in good shape before upgrading. Also, disable ILM rollovers or heavy indexing during upgrades if possible to reduce load.
+
+Testing in Staging: It’s highly recommended to have a staging environment (maybe a smaller cluster) where you test the upgrade first, especially for major version jumps (e.g., 7.x to 8.x) which might have breaking changes. Use the Upgrade Assistant (in Kibana) to detect deprecation warnings prior to a major upgrade. Fix any issues (mapping conflicts, deprecated settings) before attempting the production upgrade.
+
+Zero-Downtime Alternatives: If you absolutely cannot afford any risk of downtime, a strategy is to do a blue-green deployment: Spin up a new cluster on the target version, use reindex from remote or snapshot+restore to copy data, or use cross-cluster replication (CCR) to keep it in sync from the old cluster. Then cut over your applications to the new cluster. This approach is complex but can eliminate downtime, since you’re not upgrading in-place but rather swapping clusters.
+
+Watch Plugin Compatibility: If you use any plugins or features like machine learning jobs, make sure they are compatible with the new version. Elastic Cloud will handle system indices migrations, but something like a custom ingest processor might need updating (usually not an issue with managed service as allowed plugins are supported by Elastic).
+
+Upgrade Regularly: Don’t fall too far behind on versions; minor updates often include important fixes. Being on a supported version is also important for security (Elastic often backports security fixes only to certain recent versions). Upgrading one minor version at a time is smoother than jumping multiple minors or majors. Elastic Cloud can sometimes skip directly to the next major, but you still should check release notes for intermediate versions.
+
+
+A well-planned upgrade usually goes through without issues in Elastic Cloud, but have a backout plan: take a snapshot before upgrading, so if something goes wrong, you could restore to a new cluster of the old version if needed. In practice, rolling upgrades in Elastic Cloud are reliable – still, coordinate with your team and perform them in a maintenance window if it’s a critical system (even if downtime is minimal, performance might dip during node restarts).
+
+High Availability and Disaster Recovery Setup
+
+Ensuring high availability (HA) and planning for disaster recovery (DR) are critical for production:
+
+High Availability (In-Region):
+
+Multi-AZ Deployment: Deploy your Elastic Cloud cluster across multiple Availability Zones within East US 2. Azure’s East US 2 region supports Availability Zones. In Elastic Cloud’s deployment settings, if you increase the “zone count” to 2 or 3, it will distribute data nodes across distinct AZs (while still being in East US 2). This way, if one AZ experiences an outage, the cluster can continue running on the others. For example, with 3 AZs and 1 replica, each shard’s primary and replica will be in different zones, ensuring zone-level redundancy. Elastic Cloud manages allocation awareness automatically when you select multiple zones.
+
+Sufficient Master Nodes: Always have 3 master-eligible nodes (for quorum). Elastic Cloud will do this if you choose 3 zones (each zone gets a master). This prevents cluster service disruption if one goes down (2 out of 3 still form quorum). If you had only 1 master and that node died, the cluster becomes inoperable until it’s back – avoid that single point of failure by design.
+
+Replication Settings: As noted, at least one replica for each shard so data is redundant across nodes and zones. This is non-negotiable for HA (no replicas means any node loss causes data loss/unavailability). With 1 replica and 3 AZs, Elastic ensures primary and replica aren’t in the same AZ. If you want even higher read throughput or an additional safety copy, you could use 2 replicas (meaning 3 copies of each shard, ideally spread across 3 AZs).
+
+Load Balancing: Elastic Cloud endpoints are fronted by a layer that balances requests. If you self-managed, you’d put a load balancer (like Azure Application Gateway or Traffic Manager) in front of coordinating nodes. In Elastic Cloud, the provided endpoint (URL) will route to the cluster automatically; under the hood each client request is handled by any available instance. So you don’t have to worry about Azure LB for the managed service – that’s built-in.
+
+
+Disaster Recovery (Cross-Region):
+
+Snapshots Off-Site: The primary DR mechanism is storing snapshots in a different region (as covered). If East US 2 has a region-wide outage, you can deploy a new cluster in, say, Central US or West US 2, and restore from the latest snapshot in Azure blob (especially if using RA-GRS storage, your data is already replicated to secondary region). Keep an automated process/documentation for how to bring up DR cluster: Elastic Cloud API or portal to create deployment in secondary region, then restore snapshot and update application endpoints.
+
+Cross-Cluster Replication (CCR): For more rapid failover, Elastic offers cross-cluster replication (a Platinum feature) where a remote cluster continuously replicates indices from the primary cluster. For example, you can run another Elastic Cloud deployment in West US 2 that is a follower cluster. It will subscribe to the leader indices from East US 2 and ingest every change (with some lag). In a DR event, this follower can be promoted to active (you’d need to re-point your apps). CCR can be uni-directional (active-passive) or even bi-directional for active-active use cases. However, CCR will double your costs as you maintain two full clusters. The benefit is near real-time continuity and possibly serving read traffic from both clusters if needed (e.g., for geo latency).
+
+DNS/Endpoint Failover: Consider how your application will switch to the DR cluster. If using CCR, the DR cluster might be mostly idle for queries until needed. You could front both clusters with a global endpoint (Azure Traffic Manager or Azure Front Door) that directs to primary but fails over to secondary if primary is down. Alternatively, you can have a manual DNS cutover in DR. This needs planning – including perhaps warming up client caches or ensuring the client apps can reconnect to the new endpoint smoothly (some clients might need restart or config change).
+
+Backup of Security Config: Note that if you have users/roles or other cluster settings, these might not be captured in index snapshots (user accounts are in the cluster security index, which is snapshot if you include all indices, but if you only snapshot certain data indices, you might not capture them). With CCR, security is not replicated. Elastic Cloud when creating a new cluster may allow linking to the same SSO etc., but ensure that any non-data configurations (like ILM policies, ingest pipelines, etc.) are exported or can be reapplied in DR cluster. A best practice is to automate your cluster configuration (for example, keep JSON exports of index templates, ILM policies, and have a script or use Terraform provider for Elastic Cloud to recreate them in new deployment).
+
+
+Implementing DR has cost and complexity, so weigh your business RTO/RPO requirements. At minimum, regular snapshots give you an RPO of whatever your last snapshot was (maybe 24h or less), and RTO of the time to spin up and restore (maybe 1-2 hours for multi-terabyte if planned well). CCR can shrink RPO to seconds and RTO to minutes (just failover DNS), at the cost of running two clusters continuously.
+
+Finally, ensure you document the procedures for recovery and test them. For instance, do a simulated region outage test: disable the primary cluster and see how you can get the secondary up. This will surface issues in a controlled way.
+
+Conclusion
+
+Deploying Elastic Cloud on Azure provides a powerful, managed search and analytics platform, but it requires thoughtful architecture and operations planning. In summary, deploy via Azure Marketplace or Elastic’s console to East US 2 for a fully managed experience with Azure-integrated billing. Use Azure Private Link for secure, private connectivity, and integrate with Azure AD for seamless SSO and role management. Design your cluster with scale and resilience in mind: a hot-warm tier architecture for 1.36B documents, appropriately sized shards (~30-50GB), and enough nodes to handle the load with  replication for HA. Leverage Azure Blob Storage to externalize large content and to serve as a snapshot repository for backups. Integrate Elastic with Azure services like Functions and App Service by using secure networking and API keys, enabling rich data pipelines between your applications and Elasticsearch. For observability, utilize Elastic’s stack monitoring and consider ingesting Azure logs into Elastic for a unified view, while using Azure’s monitoring only as needed for high-level alerts. Lastly, follow best practices of ILM-managed data retention, automated snapshots, careful upgrade processes, and multi-AZ/cross-region setups to ensure high availability and disaster preparedness.
+
+By adhering to these guidelines, your architecture team and DevOps engineers can successfully run Elastic Cloud on Azure in production—delivering reliable search and analytics at scale, securely and efficiently integrated into your Azure ecosystem.
