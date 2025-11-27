@@ -1,29 +1,35 @@
+Title: Migration of RealNing Application to PropertyInsight
 
-The conversation details the successful migration of the "Real Info" application from AWS to the Property Inside (PI) environment, highlighting the challenges encountered due to the application's monolithic architecture, Oracle database, and vulnerabilities, and the solutions implemented, such as using a reverse proxy.
-1. Project Overview and Objectives
-Acquisition and Migration Goal:
-PI acquired the "Real Info" product, aiming to migrate its AWS-hosted application to the PI environment.
-The primary objective was to move the .NET application from AWS to PI and then decommission the AWS environment.
-The plan involved migrating the "Real Info" application to PI and subsequently closing down the original application.
-Initial State of the Application:
-The source code was in .NET, and the database was Oracle, with schema and tables provided.
-The application was monolithic, lacking clear separation between data access and business logic.
-The application used direct dynamic SQL queries instead of stored procedures for database calls.
-2. Challenges Encountered During Migration
-Technical Challenges:
-The first challenge involved migrating the Oracle schema to SQL, a significant database conversion task.
-The application's monolithic structure posed deployment problems due to the lack of clear layer separation.
-The absence of distinct web and application layers meant everything was hosted on the web, hindering proper deployment.
-Security and Business Vulnerabilities:
-The application, being in production for 45 days, had accumulated approximately 300 vulnerabilities that required fixing.
-A business expectation was to complete development within 6-8 months to avoid the closure of the AWS application.
-Failure to meet the deadline would result in the loss of the application if the AWS environment was shut down.
-3. Solutions and Presentation Requirements
-Solutions Implemented:
-A reverse proxy was utilized to act as a "fake API," facilitating communication between components.
-The team successfully addressed and closed out the identified vulnerabilities within the application.
-The migration successfully moved the application to the PI environment, now showing "PITP" as Property Inside.
-Presentation Requirements for Crawley:
-The presentation to Crawley needs to start with a brief description of the "Real Info" application, including its URL.
-The title slide should be "Successful Migration of Real Info Application to Property Inside."
-The presentation should detail business expectations, challenges faced, and how these challenges were overcome.
+Business Case: PropertyInsight acquired RealNing and aimed to migrate its legacy application into PI within 6–8 months, moving off the old on‑prem environment.
+
+Key Challenges:
+
+Monolithic .NET/Oracle architecture with poor scalability and modularity.
+
+UI built with Oracle Forms tightly coupled to the business and data layers.
+
+Heavy reliance on Oracle DB; PropertyInsight uses SQL Server.
+
+Large, single‑solution codebase made branching and merging difficult.
+
+Actions Taken:
+
+Implemented a reverse proxy and web application firewall to manage traffic and enhance security.
+
+Refactored code into smaller solutions/modules and upgraded to .NET Standard.
+
+Replaced HQPDF with iTextSharp for report generation and removed Oracle‑specific dependencies.
+
+Planned and executed migration from Oracle DB to SQL Server, including data‑mapping and stored‑procedure conversion.
+
+Established a robust TFS branching/merging strategy and modular deployment process.
+
+Achievements:
+
+Successfully migrated the application within target timeframe; decommissioned the old on‑prem setup.
+
+Cross‑database support enabled; all Oracle dependencies removed.
+
+Reverse proxy load‑balancing handles high traffic; security posture improved.
+
+Codebase re‑organized for easier maintenance, development, and release cycles.
